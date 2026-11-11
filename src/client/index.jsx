@@ -12,7 +12,6 @@ import { SettingsEditor } from './settings-editor.js'
 import { MicrophoneCheck } from './microphone.js'
 import { zh } from './locales.ts'
 import { voiceTargetId } from './voice-target.js'
-import { activeVoice } from './voice-state.js'
 import { SettingsDialog } from './SettingsDialog.jsx'
 
 export const inject = ['slots', 'configForms', 'sessions', 'workspaces', 'uiWorkspace', 'layout', 'uiConversation', 'locale']
@@ -26,6 +25,7 @@ function Entry({ t, openVoicePanel, sessionId }) {
 function MossIcon({ size = 18 }) { return <IconMicrophoneOutlineRegular size={size}/> }
 
 function MainVoicePanel(props) { return <VoiceView {...props} openView={props.openNativeConversation}/> }
+function NewVoicePanel(props) { return <VoiceView {...props} newConversation openView={props.openNativeConversation}/> }
 
 export function apply(ctx) {
   ctx.effect(() => ctx.locale.register('moss', { zh, en: zh }), 'moss.locale')
@@ -49,7 +49,7 @@ export function apply(ctx) {
   })
   controller.onExpand = id => {
     if (id) ctx.uiWorkspace.openSession(id)
-    ctx.layout.selectPanel('moss')
+    ctx.layout.selectPanel('moss-session')
   }
   ctx.effect(() => {
     const style = document.createElement('style')
@@ -63,40 +63,36 @@ export function apply(ctx) {
     if (!response.ok) throw new Error(t('index.2'))
     return response.json()
   }
-  const createVoice = async () => {
+  let creating
+  const createVoice = () => creating ??= (async () => {
+    controller.patch({ creating: true, draftError: null })
     try {
-    const selection = settingsForm.getSnapshot().value?.voiceModel
-    if (!selection?.provider || !selection?.model) throw Object.assign(new Error(t('index.3')), { code: 'VOICE_NOT_CONFIGURED' })
-    const current = controller.getSnapshot()
-    if (activeVoice(current.phase)) { controller.expand(); return }
-    const sessions = ctx.sessions.list.getSnapshot()
-    const existing = voiceTargetId(current, sessions)
-    if (existing) {
-      controller.expand(existing)
-      await controller.start(existing)
-      return
-    }
-    const main = Object.values(sessions.byId).find(row => row.retainedBy.mainView > 0)
-    const cwd = main?.cwd ?? ctx.workspaces.list.getSnapshot().items[0]?.path
-    if (!cwd) throw new Error(t('index.4'))
-    const response = await fetch('/dsh-moss-live/sessions', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cwd }) })
-    const result = await response.json()
-    if (!response.ok) throw Object.assign(new Error(result.message ?? t('index.5')), { code: result.error })
-    await ctx.sessions.refresh()
-    ctx.uiWorkspace.openSession(result.sessionId)
-    ctx.layout.selectPanel('moss')
-    await controller.start(result.sessionId)
-    } catch (error) { controller.failure(error.message, error.code); throw error }
-  }
+      const selection = settingsForm.getSnapshot().value?.voiceModel
+      if (!selection?.provider || !selection?.model) throw Object.assign(new Error(t('index.3')), { code: 'VOICE_NOT_CONFIGURED' })
+      const sessions = ctx.sessions.list.getSnapshot()
+      const main = Object.values(sessions.byId).find(row => row.retainedBy.mainView > 0)
+      const cwd = main?.cwd ?? ctx.workspaces.list.getSnapshot().items[0]?.path
+      if (!cwd) throw new Error(t('index.4'))
+      const response = await fetch('/dsh-moss-live/sessions', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cwd }) })
+      const result = await response.json()
+      if (!response.ok) throw Object.assign(new Error(result.message ?? t('index.5')), { code: result.error })
+      await ctx.sessions.refresh()
+      ctx.uiWorkspace.openSession(result.sessionId)
+      ctx.layout.selectPanel('moss-session')
+      await controller.start(result.sessionId, { minimized: false })
+    } catch (error) { controller.patch({ draftError: { message: error.message, code: error.code } }); throw error }
+    finally { controller.patch({ creating: false }) }
+  })().finally(() => { creating = undefined })
   const historyBars = new Map()
   const shared = () => ({
     hooks: { voice: controller, voiceSettings: settingsForm, voiceSessionList: ctx.sessions.list, voicePanelInfo: ctx.layout.panelInfo }, createVoice,
-    openVoicePanel: () => controller.expand(),
+    openVoicePanel: () => ctx.layout.selectPanel('moss'),
     openVoiceSession: id => controller.expand(id),
-    startVoice: id => controller.start(id, { minimized: ctx.layout.panelInfo.getSnapshot().activePanelId !== 'moss' }), stopVoice: () => controller.stop(), pauseVoice: () => controller.pause(),
+    startVoice: id => controller.start(id, { minimized: ctx.layout.panelInfo.getSnapshot().activePanelId !== 'moss-session' }), stopVoice: () => controller.stop(), pauseVoice: () => controller.pause(),
     muteVoice: () => controller.mute(), interruptVoice: () => controller.interrupt(),
     minimizeVoice: () => controller.minimize(), expandVoice: () => controller.expand(),
     openSettings: () => controller.patch({ settingsOpen: true }),
+    mountVoiceDraft: () => { controller.patch({ draftError: null }); controller.minimize() },
     mountVoiceHistory: id => {
       historyBars.set(id, (historyBars.get(id) ?? 0) + 1)
       controller.patch({ historyBars: [...historyBars.keys()] })
@@ -119,7 +115,8 @@ export function apply(ctx) {
   })
   ctx.effect(() => ctx.uiConversation.events.register(voiceMessageDefinition), 'moss.native-transcript-revisions')
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ locale: 'moss', name: 'sidebar.panellist', id: 'moss', order: 5, label: () => t('index.6') }, MossIcon))
-  ctx.slots.inject('main', () => ctx.slots.register({ locale: 'moss', name: 'main', key: 'moss', inject: shared }, MainVoicePanel))
+  ctx.slots.inject('main', () => ctx.slots.register({ locale: 'moss', name: 'main', key: 'moss', inject: shared }, NewVoicePanel))
+  ctx.slots.inject('main', () => ctx.slots.register({ locale: 'moss', name: 'main', key: 'moss-session', inject: shared }, MainVoicePanel))
   ctx.slots.inject('conversation.input.right', () => ctx.slots.register({ locale: 'moss', name: 'conversation.input.right', id: 'moss-entry', order: 5, inject: shared }, Entry))
   ctx.slots.inject('conversation.composer', () => ctx.slots.register({ locale: 'moss', name: 'conversation.composer', id: 'moss-composer', priority: -20, select: selectMossComposer, inject: shared }, Composer))
   ctx.slots.inject('shell.bottom', () => ctx.slots.register({ locale: 'moss', name: 'shell.bottom', id: 'moss-capsule', order: 20, inject: shared }, Overlay))

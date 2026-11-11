@@ -82,5 +82,17 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "three": "^0.181.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kylinholmes/dsh-moss-live.git"
+  },
+  "homepage": "https://github.com/kylinholmes/dsh-moss-live#readme",
+  "bugs": {
+    "url": "https://github.com/kylinholmes/dsh-moss-live/issues"
+  },
+  "engines": {
+    "node": ">=24.9.0",
+    "dsh": "0.2.2-rc.1"
   }
 }

@@ -6,9 +6,9 @@
 
 | 范围 | 结果 |
 | --- | --- |
-| 自动回归 | `npm run build` 成功，`npm test` 最新 63/63 通过，包含原生 Session/JSONL 恢复、普通 Agent、配置/凭据引用、鉴权、协议、委派、提示词、媒体、设置、流体/软体和 UI。 |
+| 自动回归 | `npm run build` 成功，`npm test` 最新 67/67 通过，包含原生 Session/JSONL 恢复、普通 Agent、配置/凭据引用、鉴权、协议、委派、提示词、媒体、设置、流体/软体和 UI。 |
 | 原生 UI | 使用正式 sidebar.panellist/main、conversation.input.right/composer、shell.bottom、settings.section；官方 ui-primitives、CSS Modules 和主题 token。只有一个语音页面，原生历史保留父子任务导航。 |
-| 返回语音 | 移除重复 tab；真实 Edge 检查：历史输入框 0、重复错误 0、重复 MOSS tab 0，返回按钮可见，返回不新建会话、不额外连接。320px 无横向溢出。刷新后从侧栏恢复也沿用原生 mainView Session。另有回归证明查看其他旧会话不替换当前通话。 |
+| 返回语音 | 移除重复 tab；真实 Edge 检查：历史输入框 0、重复错误 0、重复 MOSS tab 0，返回按钮可见，返回不新建会话、不额外连接。320px 无横向溢出。刷新后通过历史控制栏返回仍沿用原生 mainView Session；侧栏按后续需求改为新建入口。另有回归证明查看其他旧会话不替换当前通话。 |
 | 统一控制栏 | 历史 composer 的返回圆钮、形象/状态、静音、暂停/恢复、结束处于同一行；无重复胶囊。暂停保留三控件、静音偏好和 Session，恢复新增一个连接，返回新增零个连接、零个 Session。五组视口无溢出，控制按钮点击区 44px。子任务页面显示同款 shell.bottom 条，展开仍为原父会话。 |
 | 设置快捷入口 | Edge 实际点击「前往设置」打开官方 Modal，提供商/模型菜单可见，关闭后 Session 不变。侧栏与弹窗复用同一 SettingsEditor/ConfigForm；五组视口弹窗边界和关闭按钮可达。公开 ShortcutsService 不含 invoke，已删除错误调用和无用依赖。 |
 | 麦克风错误 | 语音和设置统一处理未找到、拒绝授权、无法读取等浏览器错误；NotFoundError 显示中文原因，不再透出 Requested device not found。 |
@@ -63,3 +63,13 @@ Three.js 在同一页面经历多次客户端 HMR 后会提示重复实例；卸
 官方插件管理页的 checked 来自库存快照，实际操作后本次观察到其自动加载结果滞后；手动点击原生「刷新」后与 Host 一致。框架已实现操作后 load 和 changed 订阅，不能将此现象描述为完全没有自动刷新。验收同时检查真实 HTTP、入口和媒体资源，不仅检查开关旧值。
 
 这两点未用插件私有 DOM 或自造启停协议绕过；日常试用使用已构建并重新启动的本地 Host。修改包元数据后的开发环境可重启隔离 Host，用户 profile 不被改写。
+
+## 新建入口与公开发布补充
+
+用户后续确认左侧 MOSS 语音应为新建入口。现在新建和返回分别使用 `main:moss` / `main:moss-session`，同一 VoiceView 和原生 UI；图标槽仅负责图标，不拦截侧栏 DOM 或接管宿主按钮。浏览器实测：旧历史返回保持原 id；侧栏进入 session-id 为空的待开始页，POST=0；按开始 POST=1、新 id 与旧不同。后台通话在新建页保持；模拟创建失败后 active=1、连接数不增加；胶囊/历史返回同一新 id，额外连接=0，320px 无横向溢出。
+
+单元回归先复现旧入口采用历史 id 的失败，再验证新入口隔离、并发点击合并、创建失败不停止旧通话。原生选择的冷恢复仍适用于明确的返回入口。
+
+公开仓库和 Release 已获用户授权；Git 全历史（16 个旧提交）已用校验过的 Gitleaks 8.30.1 扫描，无泄漏。手机端 DSH 版本由用户确认同为 0.2.2-rc.1。CI / 预编译 tgz 交付说明见 install.md，安装不要求用户编译。
+
+发布补充验证：干净 `npm ci` 后构建成功，完整测试 67/67 通过。新增四项打包回归覆盖编译入口缺失、tag 与版本不一致、禁止安装时构建 hook、精确产物 SHA256。实际本地 tgz 清单为八个文件，包含三个编译入口、原生 patch、元数据、README、MIT License 和 Three.js 许可证，无源码、测试或开发脚本。Node 最低版本与目标 DSH 自身一致为 24.9.0。GitHub Actions 将执行相同锁定依赖/构建/测试/打包路径。

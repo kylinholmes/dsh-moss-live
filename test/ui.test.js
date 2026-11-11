@@ -16,6 +16,8 @@ test('DSH owns the rendered entry and overlay, and unloading removes both', asyn
   const formSnapshot = { status: 'ready', writable: true, revision: 1, value: { appearance: {}, voiceModel: { provider: '', model: '' }, delegation: { agentPreset: '', provider: 'spawn' } } }
   const form = { getSnapshot: () => formSnapshot, subscribe: () => () => {}, async mutate() { return true } }
   let plugin
+  const sessionSnapshot = { byId: { 'moss-live-saved': { id: 'moss-live-saved', cwd: 'C:/fixture', retainedBy: { mainView: 1 } } } }
+  let requestCount = 0, createResponse
   const context = {
     effect(callback) { const stop = callback(); if (typeof stop === 'function') disposers.push(stop); return stop },
     slots: {
@@ -27,7 +29,7 @@ test('DSH owns the rendered entry and overlay, and unloading removes both', asyn
       },
     },
     configForms: { get: () => form },
-    sessions: { list: { getSnapshot: () => ({ byId: {} }) } },
+    sessions: { list: { getSnapshot: () => sessionSnapshot }, async refresh() {}, retain() { throw new Error('No media in UI test') } },
     workspaces: { list: { getSnapshot: () => ({ items: [] }) } },
     uiWorkspace: { openSession(id) { navigation.push(['session', id]) } }, remote: { credentials: {} },
     layout: { selectPanel(id) { navigation.push(['panel', id]) }, panelInfo: { getSnapshot: () => panelSnapshot, subscribe: () => () => {} } },
@@ -38,7 +40,7 @@ test('DSH owns the rendered entry and overlay, and unloading removes both', asyn
   const sandbox = {
     window: dom.window, document: dom.window.document, location: dom.window.location,
     navigator: dom.window.navigator, console, setTimeout, clearTimeout, setInterval, clearInterval,
-    URL, AbortController,
+    URL, AbortController, fetch: async () => { requestCount++; return createResponse },
     requestAnimationFrame: callback => setTimeout(callback, 0),
     MutationObserver: dom.window.MutationObserver,
   }
@@ -55,6 +57,7 @@ test('DSH owns the rendered entry and overlay, and unloading removes both', asyn
     assert.equal(composer.options.select({ sessionId: 'moss-live-example', pendingInteraction: {} }), null, 'native approvals retain priority')
     assert.ok(entries.has('sidebar.panellist:moss'))
     assert.ok(entries.has('main:moss'))
+    assert.ok(entries.has('main:moss-session'), 'new entry and explicit session return use separate native navigation targets')
     assert.equal(entries.has('conversation.view:moss'), false, 'there is one voice page, not a second tab with another composer')
     assert.ok(entries.has('settings.section:moss'))
     assert.ok(entries.has('shell.overlay:moss-settings'), 'quick settings must have an owned native modal, not an unavailable shortcut method')
@@ -88,7 +91,28 @@ test('DSH owns the rendered entry and overlay, and unloading removes both', asyn
     await act(async () => entries.get('shell.overlay:moss-settings').options.inject().closeSettings())
     assert.equal(shared.hooks.voice.getSnapshot().settingsOpen, false)
     await act(async () => returnButton.click())
-    assert.deepEqual(navigation, [['session', 'moss-live-saved'], ['panel', 'moss']], 'returning opens the same native session without creating one')
+    assert.deepEqual(navigation, [['session', 'moss-live-saved'], ['panel', 'moss-session']], 'returning opens the same native session without creating one')
+    const landing = entries.get('main:moss')
+    assert.equal(landing.component(bindInjected(landing.options)).props.newConversation, true)
+    navigation.length = 0
+    await act(async () => shared.openVoicePanel())
+    assert.deepEqual(navigation, [['panel', 'moss']], 'homepage entry opens the new-conversation landing')
+    navigation.length = 0
+    formSnapshot.value.voiceModel = { provider: 'native', model: 'opaque-realtime' }
+    await act(async () => shared.hooks.voice.patch({ phase: 'listening', sessionId: 'moss-live-active' }))
+    createResponse = { ok: false, json: async () => ({ error: 'FAILED', message: 'creation failed' }) }
+    await act(async () => {
+      await assert.rejects(Promise.all([shared.createVoice(), shared.createVoice()]), /creation failed/)
+    })
+    assert.equal(requestCount, 1, 'new-conversation creation is coalesced while pending')
+    assert.equal(shared.hooks.voice.getSnapshot().phase, 'listening', 'creation failure does not stop an existing call')
+    assert.equal(shared.hooks.voice.getSnapshot().sessionId, 'moss-live-active')
+    assert.equal(navigation.length, 0)
+    createResponse = { ok: true, json: async () => ({ sessionId: 'moss-live-new' }) }
+    await act(async () => { await Promise.all([shared.createVoice(), shared.createVoice()]) })
+    assert.equal(requestCount, 2, 'starting a new chat creates exactly one new native session')
+    assert.equal(shared.hooks.voice.getSnapshot().sessionId, 'moss-live-new')
+    assert.deepEqual(navigation, [['session', 'moss-live-new'], ['panel', 'moss-session']])
     await act(async () => root.unmount())
     for (const stop of disposers.reverse()) await stop()
     assert.equal(entries.size, 0)
