@@ -1,16 +1,13 @@
 import { cx } from './classes.js'
 import React from 'react'
-import { Button, IconMicrophoneOutlineRegular, IconStopFillRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import { Orb } from './Orb.jsx'
-import { activeVoice, phaseLabel } from './VoiceView.jsx'
+import { VoiceBar } from './VoiceBar.jsx'
 
-export function Overlay({ t, useVoice, useVoiceSettings, expandVoice, muteVoice, stopVoice }) {
+export function Overlay({ t, useVoice, useVoiceSettings, useVoicePanelInfo, expandVoice, ...controls }) {
   const state = useVoice(snapshot => snapshot)
   const settings = useVoiceSettings(snapshot => snapshot)
-  if (!state.minimized || !activeVoice(state.phase)) return null
+  const panel = useVoicePanelInfo(snapshot => snapshot.activePanelId)
+  if (!state.minimized || !state.sessionId || (panel === null && state.historyBars?.includes(state.sessionId))) return null
   return <aside className={cx('moss-capsule')} aria-label={t('Overlay.1')}>
-    <Button onClick={expandVoice} aria-label={t('Overlay.2')}><Orb small appearance={settings.value?.appearance}/><span>MOSS<span>{state.muted ? t('Overlay.3') : phaseLabel(state.phase, t)}</span></span></Button>
-    <Button aria-label={state.muted ? t('VoiceView.10') : t('VoiceView.11')} aria-pressed={state.muted} onClick={muteVoice}><IconMicrophoneOutlineRegular/></Button>
-    <Button aria-label={t('VoiceView.4')} onClick={stopVoice}><IconStopFillRegular/></Button>
+    <VoiceBar {...controls} t={t} state={state} sessionId={state.sessionId} appearance={settings.value?.appearance} onReturn={expandVoice} returnLabel={t('Overlay.2')}/>
   </aside>
 }

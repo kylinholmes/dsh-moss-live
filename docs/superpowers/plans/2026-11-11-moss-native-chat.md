@@ -1,6 +1,6 @@
 # MOSS Native Chat Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 在真实 DSH 中交付可配置、持久化、可委派子任务的 MOSS 语音 Chat。
 
@@ -78,7 +78,7 @@
 
 **Files:** Create `src/client/controller.js`, `src/client/capture-worklet.js`, `src/client/playback.js`; Test `test/controller.test.js`, `test/playback.test.js`。
 
-**Interfaces:** 控制器 `getSnapshot/subscribe/start/stop/mute/interrupt/dispose`；视图不直接拥有 Socket/AudioContext。
+**Interfaces:** 控制器 `getSnapshot/subscribe/start/stop/pause/mute/interrupt/dispose`；视图不直接拥有 Socket/AudioContext。
 
 - [x] 写授权晚返回、start/stop/start 竞态、view detach 保持、dispose 清理的失败测试。
 - [x] 实现 AudioWorklet 捕获与线性重采样，Blob URL 释放、有界发送和播放队列。
@@ -92,7 +92,7 @@
 **Interfaces:** 正式槽位注册，selector 只匹配 MOSS 主会话；设置页消费 DSH `form.state/form.mutate`，Agent 选项来自原生 roster。
 
 - [x] 写真实 React 挂载/卸载、主/普通/子任务会话区分和权限交互优先的失败测试。
-- [x] 从视觉原型实现唯一 main:moss 语音球页面、字幕、控制与最小化条；不注册重复的语音 tab，历史 composer 只保留返回语音按钮；保留原生 Chat、会话标题、任务目录及父子导航。
+- [x] 从视觉原型实现唯一 main:moss 语音球页面、字幕、控制与最小化条；不注册重复的语音 tab，历史 composer 采用统一语音控制栏；保留原生 Chat、会话标题、任务目录及父子导航。
 - [x] 实现三组插件设置：实心弹性 3D 球及吸附外雾的颜色/浓度/扩散或图片、从 DSH 目录分提供商/模型选择语音模型、默认委派 Agent 预设及执行模型；聊天页不添加模型选择器。
 - [x] 运动物理补充：局部抓取拉伸/松手回弹/体积约束，三维流体速度场/压力投影/粒子平流/触碰推雾；在设置与独立预览中验证，不将光照效果计作此项通过。
 - [x] 使用官方 Button/Menu/Input/StateDot，所有页面跟随 DSH 主题；在设置左侧注册 MOSS section，顶部 sidebar.panellist/main 和首页 conversation.input.right 提供入口；不添加任何 MOSS provider 配置表单。
@@ -105,7 +105,7 @@
 
 **Interfaces:** `npm run build`、`npm test`、`npm run dev:dsh` 与 mock MOSS 验收入口。
 
-- [ ] Edge 中验证真实插件启停、配置重启、语音/历史/多个任务互切、连接保留、显式结束。
-- [ ] 检查 1280×900、390×844、320×568、手机横屏及键盘压缩场景；检查控制台与可访问性动作。
-- [ ] 独立只读 reviewer 检查 Spec 覆盖、数据完整性、鉴权和释放；修复重要发现并运行对应回归。
-- [ ] 记录真实供应商/麦克风未运行部分，不把 mock 通过当成真人语音通过。提交最终文档与验证结果，不自动部署设备。
+- [x] Edge 中验证真实插件启停、配置重启、语音/历史/多个任务互切、连接保留、显式结束。
+- [x] 检查 1280×900、390×844、320×568、手机横屏及键盘压缩场景；检查控制台与可访问性动作。
+- [x] 独立只读 reviewer 检查 Spec 覆盖、数据完整性、鉴权和释放；修复重要发现并运行对应回归。
+- [x] 记录真实供应商/麦克风未运行部分，不把 mock 通过当成真人语音通过。提交最终文档与验证结果，不自动部署设备。

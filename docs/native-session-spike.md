@@ -11,7 +11,7 @@
 - 同一个真实 MOSS 父 Agent 能建立两个独立 spawn 子任务；显式传普通模型后，两任务各调用模型一次，父 Agent 不调用模型。最终采用 parent delivery：被动 inbox 保存原生任务通知，冷恢复保留上下文；activation.result 同时用于协议回传。
 - model.select 对异值和同值均拒绝，防止原生 API 在选择 MOSS 后污染全局默认模型。所选 `moss-live-2.0` 和 `vendor/MOSS-Live-2.0-preview` 在创建、历史和恢复中原样保留。
 
-命令：`node --test test/native-session.test.js`，7/7 通过，另包含失败 setup 释放独占写 handle、owner 在异步 setup 中卸载后不发布迟到 Agent。此技术验证本身不代表 MOSS 网络、真实麦克风、完整 Web UI 或设置页已验证；后续独立结果见 [验收记录](verification.md)。
+命令：`node --test test/native-session.test.js`，8/8 通过，另包含失败 setup 释放独占写 handle、owner 在异步 setup 中卸载后不发布迟到 Agent。此技术验证本身不代表 MOSS 网络、真实麦克风、完整 Web UI 或设置页已验证；后续独立结果见 [验收记录](verification.md)。
 
 ## 实施决定
 
@@ -19,11 +19,11 @@
 
 Native JSONL backend 已在 session/event 上接收发布后的事件，驱动只持有和关闭 handle，不再重复 append。未发布 seed 与 resume 产生的 suffix 仍由工厂先写入。
 
-## 仍需完成
+## 后续收尾已验证
 
-- 迟到资源和并发卸载的进一步取消验证；基础 provider 与功能插件的生命周期隔离。
-- 原生 API model selection 全路径、设置保存恢复与真实浏览器验收。
-- MOSS Wire 初始化与媒体、委派去重、恢复上下文投影和转写修订的实际 Chat 展示。
+- 连接失败前没有实际内容，不创建空的完成轮次；收到内容才保存当次系统提示词与 turn。
+- 活跃子任务期间释放父 Agent，通过官方 drainDescendants 先在原父实例上结算，再关闭持久化 handle；冷恢复仍有通知。媒体收起、暂停及页面切换不释放父 Agent。
+- 原生模型拒绝、配置恢复、协议初始化、媒体、委派和浏览器结果见 [验收记录](verification.md)，真人麦克风质量仍独立待验收。
 
 ## 环境
 

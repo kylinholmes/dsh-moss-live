@@ -83,6 +83,24 @@ test('fixed MOSS model rejects even same-route public selection before global de
   await handle.dispose()
 })
 
+test('connecting or failing before any speech does not create an empty completed chat turn', async t => {
+  const root = await mkdtemp(join(testTemp, 'moss-native-empty-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const ctx = await harness(t, root)
+  const handle = await implementation.createMossAgent(ctx, ctx, { sessionId: 'moss-live-empty', meta: { cwd: root }, route })
+  handle.agent.voice.configure({ epoch: 'mic-failed', prompt: 'persona', route })
+  handle.agent.voice.end()
+  assert.equal(handle.agent.session.snapshotEvents().filter(event => event.type === 'turn/start').length, 0)
+  handle.agent.voice.configure({ epoch: 'with-speech', prompt: 'persona', route })
+  handle.agent.voice.user({ turn: 'input', text: '你好' })
+  handle.agent.voice.reply({ run_id: 'run', turn_id: 'reply', text: '你好。', status: 'completed' })
+  const events = handle.agent.session.snapshotEvents()
+  assert.equal(events.filter(event => event.type === 'turn/start').length, 1)
+  assert.equal(events.filter(event => event.type === 'system/message').length, 1)
+  assert.ok(events.findIndex(event => event.type === 'system/message') < events.findIndex(event => event.type === 'user/message'))
+  await handle.dispose()
+})
+
 test('future MOSS model ids pass unchanged through configuration, history and cold restore', async t => {
   const root = await mkdtemp(join(testTemp, 'moss-native-version-'))
   t.after(() => rm(root, { recursive: true, force: true }))
@@ -167,9 +185,15 @@ test('one official AgentLoop provider routes MOSS and leaves ordinary Agent exec
   for (const plugin of [LlmRuntime, SessionStore, Projections, SystemPrompt, Tools, ToolExecutor, AgentRegistry]) await ctx.plugin(plugin)
   await ctx.plugin(Jsonl, { root, compression: 'none' })
   let modelCalls = 0
+  const slowEntered = Promise.withResolvers(), releaseSlow = Promise.withResolvers()
   class TextAdapter extends LlmAdapter {
-    async *stream() {
+    async *stream(options) {
       modelCalls++
+      if (options.model === 'slow') {
+        slowEntered.resolve()
+        await Promise.race([releaseSlow.promise, new Promise(resolve => options.signal.addEventListener('abort', resolve, { once: true }))])
+        options.signal.throwIfAborted()
+      }
       yield { type: 'block-start', index: 0, blockType: 'text' }
       yield { type: 'text-delta', index: 0, text: 'ordinary reply' }
       yield { type: 'block-end', index: 0, block: { type: 'text', text: 'ordinary reply' } }
@@ -204,9 +228,17 @@ test('one official AgentLoop provider routes MOSS and leaves ordinary Agent exec
   assert.equal(moss.agent.session.deriveMessages().filter(message => message.source?.kind === 'subagent-settled').length, 2)
   assert.equal(moss.agent.session.snapshotEvents().filter(event => event.type === 'assistant/message').length, 0)
   await ordinary.dispose()
-  await moss.dispose()
+  const activeChild = await ctx.subagents.startActivation({
+    provider: 'spawn', label: 'still running', delivery: 'parent', signal: new AbortController().signal,
+    request: { parent: moss.agent, cwd: root, prompt: [{ type: 'text', text: 'finish later' }], agentOptions: { provider: 'ordinary', model: 'slow' } },
+  })
+  await slowEntered.promise
+  const disposing = moss.dispose()
+  await new Promise(resolve => setImmediate(resolve))
+  releaseSlow.resolve()
+  await Promise.all([disposing, activeChild.result])
   const restored = await ctx.agents.resume({ resumeSessionId: 'moss-live-routed' })
   assert.ok(restored.agent.voice, 'native registry cold resume must select the MOSS driver')
-  assert.equal(restored.agent.session.deriveMessages().filter(message => message.source?.kind === 'subagent-settled').length, 2)
+  assert.equal(restored.agent.session.deriveMessages().filter(message => message.source?.kind === 'subagent-settled').length, 3, 'an active child must settle durably before its exact parent instance is released')
   await restored.dispose()
 })

@@ -1,3 +1,5 @@
+import { activeVoice } from './voice-state.js'
+
 /** Owned by the plugin, never a mounted view. Dependencies keep lifecycle races testable. */
 export class VoiceController {
   constructor(dependencies) {
@@ -10,15 +12,16 @@ export class VoiceController {
   getSnapshot = () => this.snapshot
   subscribe = listener => { this.listeners.add(listener); return () => this.listeners.delete(listener) }
   patch(values) { this.snapshot = { ...this.snapshot, ...values }; for (const listener of this.listeners) listener() }
-  async start(sessionId) {
+  async start(sessionId, { minimized = this.snapshot.minimized } = {}) {
     if (this.disposed) return
-    if (this.snapshot.sessionId === sessionId && this.snapshot.phase !== 'idle' && this.snapshot.phase !== 'error') { this.expand(); return }
+    if (this.snapshot.sessionId === sessionId && activeVoice(this.snapshot.phase)) return
+    const muted = this.snapshot.sessionId === sessionId && this.snapshot.muted
     this.stop()
     const generation = this.generation
     const current = () => generation === this.generation && !this.disposed
     const pending = [], maxPending = 512 * 1024
     let pendingBytes = 0
-    this.patch({ sessionId, viewSessionId: sessionId, phase: 'connecting', minimized: false, muted: false, userText: '', assistantText: '', error: '' })
+    this.patch({ sessionId, viewSessionId: sessionId, phase: 'connecting', minimized, muted, userText: '', assistantText: '', error: '', errorCode: undefined })
     const abort = new AbortController()
     this.abort = abort
     try {
@@ -33,8 +36,9 @@ export class VoiceController {
       }, abort.signal)
       if (!current()) { connection.close(); return }
       this.connection = connection
+      connection.send({ action: 'mic_state', enabled: !this.snapshot.muted })
       const media = await this.dependencies.openMedia(format, bytes => {
-        if (current() && this.connection) this.connection.send(bytes)
+        if (current() && this.connection && !this.snapshot.muted) this.connection.send(bytes)
       }, event => { if (current()) this.connection?.send(event) }, abort.signal, levels => {
         if (!current()) return
         this.patch({ energy: levels.playing ? levels.outputLevel : this.snapshot.muted ? 0 : levels.inputLevel,
@@ -42,6 +46,7 @@ export class VoiceController {
       })
       if (!current()) { media.dispose(); return }
       this.media = media
+      media.mute?.(this.snapshot.muted)
       this.patch({ phase: 'listening' })
       for (const event of pending) this.receive(event)
     } catch (error) {
@@ -76,6 +81,7 @@ export class VoiceController {
     this.patch({ muted })
   }
   interrupt() { this.media?.playback.interruptAll(); this.patch({ phase: 'listening' }) }
+  pause() { this.stop(); this.patch({ phase: 'paused' }) }
   minimize() { this.patch({ minimized: true }) }
   expand(viewSessionId = this.snapshot.sessionId) {
     this.patch({ viewSessionId, minimized: Boolean(this.snapshot.sessionId && viewSessionId !== this.snapshot.sessionId) })
@@ -88,7 +94,7 @@ export class VoiceController {
     this.media?.dispose(); this.media = null
     this.connection?.close(); this.connection = null
     this.chunk = null
-    this.patch({ phase: 'idle', minimized: false, muted: false, energy: 0 })
+    this.patch({ phase: 'idle', energy: 0 })
   }
   dispose() { this.stop(); this.disposed = true; this.listeners.clear() }
 }

@@ -79,6 +79,23 @@ test('transcript revisions and reordered reply terminal events keep distinct opa
   assert.deepEqual(f.records.replies[0], { run_id: 'r', turn_id: 'opaque-99', text: '好的', status: 'completed' })
 })
 
+test('a final transcript delayed beyond the old timeout remains one complete logical reply', async t => {
+  const f = await fixture(t)
+  f.send({ action: 'session_attached', data: { delegation: 'client' } })
+  f.send({ action: 'session.updated', data: { error: '' } })
+  f.send({ action: 'media.configured', data: { error: '', input_audio: { format: 'pcm16', sample_rate: 16000, channels: 1 }, output_audio: { format: 'pcm16', sample_rate: 48000, channels: 1 } } })
+  await f.starting
+  const identity = { run_id: 'late-run', turn_id: 'late-reply' }
+  f.send({ action: 'response.ended', data: { ...identity, status: 'completed' } })
+  await new Promise(resolve => setTimeout(resolve, 1650))
+  assert.equal(f.records.replies.length, 0, 'terminal status is not a guarantee that final text arrived')
+  f.send({ action: 'output.transcript.done', data: { ...identity, text: '迟到的完整回复。' } })
+  await f.until(() => f.records.replies.length === 1)
+  f.send({ action: 'output.transcript.done', data: { ...identity, text: '迟到的完整回复。' } })
+  f.session.stop()
+  assert.deepEqual(f.records.replies, [{ ...identity, text: '迟到的完整回复。', status: 'completed' }])
+})
+
 test('configuration rejection closes safely without media or private error leakage', async t => {
   const f = await fixture(t)
   const rejected = assert.rejects(f.starting, /配置/)

@@ -173,7 +173,9 @@ export class MossSession {
         reply.status = event.action.endsWith('interrupted') ? 'aborted' : data.status
         if (!['completed', 'aborted', 'failed'].includes(reply.status)) throw new Error('Invalid response status')
         if (typeof data.text === 'string') reply.text = data.text
-        if (!reply.timer) reply.timer = setTimeout(() => this.finish(key), 1500)
+        // A completed response can precede its final transcript by an unbounded
+        // network delay. Keep the bounded pending entry until .done (or stop),
+        // rather than sealing an empty/partial reply on a wall-clock timeout.
         if (reply.status !== 'completed') reply.final = true
       }
       if (reply.status && reply.final) this.finish(key)
@@ -190,7 +192,6 @@ export class MossSession {
   finish(key) {
     const reply = this.pending.get(key)
     if (!reply) return
-    clearTimeout(reply.timer)
     this.pending.delete(key)
     this.finished.add(key)
     this.agent.voice.reply({ run_id: reply.run_id, turn_id: reply.turn_id, text: reply.text, status: reply.status ?? 'aborted' })

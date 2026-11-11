@@ -1,17 +1,16 @@
 import { cx } from './classes.js'
-import React from 'react'
-import { Button, IconMicrophoneOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import { activeVoice } from './VoiceView.jsx'
+import React, { useEffect } from 'react'
+import { VoiceBar } from './VoiceBar.jsx'
 
 export function selectMossComposer({ sessionId, pendingInteraction }) {
   return sessionId?.startsWith('moss-live-') && !pendingInteraction ? { sessionId } : null
 }
 
-export function Composer({ t, useVoice, sessionId, openVoiceSession }) {
+export function Composer({ t, sessionId, openVoiceSession, useVoice, useVoiceSettings, mountVoiceHistory, ...controls }) {
   const state = useVoice(snapshot => snapshot)
-  const live = state.sessionId === sessionId && activeVoice(state.phase)
+  const settings = useVoiceSettings(snapshot => snapshot)
+  useEffect(() => mountVoiceHistory(sessionId), [sessionId])
   return <div className={cx('moss-composer')}>
-    <span>{live ? t('Composer.live') : t('Composer.history')}</span>
-    <Button variant="outline" aria-label={t('Composer.3')} onClick={() => openVoiceSession(sessionId)} icon={<IconMicrophoneOutlineRegular/>}>{t('Composer.3')}</Button>
+    <VoiceBar {...controls} t={t} state={state} sessionId={sessionId} appearance={settings.value?.appearance} onReturn={() => openVoiceSession(sessionId)}/>
   </div>
 }

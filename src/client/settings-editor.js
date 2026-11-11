@@ -21,22 +21,40 @@ export class SettingsEditor {
     this.publish()
   }
   schedule() { clearTimeout(this.timer); this.timer = setTimeout(() => void this.flush(), this.delay) }
-  async flush() {
+  flush() {
     clearTimeout(this.timer)
-    if (this.inFlight || !this.pending.size || ['conflict', 'error'].includes(this.status)) return
+    if (this.inFlight) return this.inFlight
+    if (!this.pending.size || ['conflict', 'error'].includes(this.status)) return Promise.resolve()
     const batch = new Map(this.pending)
-    this.inFlight = true; this.status = 'saving'; this.publish()
-    try {
-      const accepted = await this.form.mutate([...batch].map(([field, value]) => ({ op: 'set', path: [field], value })), this.revision)
-      if (accepted) {
-        for (const [field, value] of batch) if (this.pending.get(field) === value) this.pending.delete(field)
-        this.revision = this.form.getSnapshot().revision
-        this.status = this.pending.size ? 'pending' : 'saved'
-      } else this.status = 'conflict'
-    } catch { this.status = 'error' }
-    finally { this.inFlight = false; this.publish(); if (!this.disposed && this.status === 'pending') this.schedule() }
+    let complete
+    const flight = new Promise(resolve => { complete = resolve })
+    this.inFlight = flight; this.status = 'saving'; this.publish()
+    void (async () => {
+      try {
+        const accepted = await this.form.mutate([...batch].map(([field, value]) => ({ op: 'set', path: [field], value })), this.revision)
+        if (accepted) {
+          for (const [field, value] of batch) if (this.pending.get(field) === value) this.pending.delete(field)
+          this.revision = this.form.getSnapshot().revision
+          this.status = this.pending.size ? 'pending' : 'saved'
+        } else this.status = 'conflict'
+      } catch { this.status = 'error' }
+      finally {
+        this.inFlight = undefined; this.publish()
+        if (!this.disposed && this.status === 'pending') this.schedule()
+        complete()
+      }
+    })()
+    return flight
   }
   retry() { this.revision = this.form.getSnapshot().revision; this.status = 'pending'; return this.flush() }
   discard() { clearTimeout(this.timer); this.pending.clear(); this.status = 'saved'; this.publish() }
-  dispose() { clearTimeout(this.timer); void this.flush(); this.disposed = true; this.off(); this.listeners.clear() }
+  /** Stop accepting edits and wait for accepted writes; conflicts and failures retain pending values. */
+  dispose() {
+    if (this.disposal) return this.disposal
+    this.disposed = true; clearTimeout(this.timer); this.off(); this.listeners.clear()
+    this.disposal = (async () => {
+      while (this.inFlight || (this.pending.size && !['conflict', 'error'].includes(this.status))) await this.flush()
+    })()
+    return this.disposal
+  }
 }

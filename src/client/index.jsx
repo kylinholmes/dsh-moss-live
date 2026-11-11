@@ -11,8 +11,11 @@ import { cx } from './classes.js'
 import { SettingsEditor } from './settings-editor.js'
 import { MicrophoneCheck } from './microphone.js'
 import { zh } from './locales.ts'
+import { voiceTargetId } from './voice-target.js'
+import { activeVoice } from './voice-state.js'
+import { SettingsDialog } from './SettingsDialog.jsx'
 
-export const inject = ['slots', 'configForms', 'sessions', 'workspaces', 'uiWorkspace', 'layout', 'uiConversation', 'shortcuts', 'locale']
+export const inject = ['slots', 'configForms', 'sessions', 'workspaces', 'uiWorkspace', 'layout', 'uiConversation', 'locale']
 const bindForm = form => ({ getSnapshot: () => form.getSnapshot(), subscribe: listener => form.subscribe(listener), mutate: (ops, revision) => form.mutate(ops, revision) })
 
 function Entry({ t, openVoicePanel, sessionId }) {
@@ -30,7 +33,7 @@ export function apply(ctx) {
   const settingsForm = bindForm(ctx.configForms.get('dsh-moss-live'))
   const editor = new SettingsEditor(settingsForm)
   const microphone = new MicrophoneCheck(navigator.mediaDevices, t)
-  ctx.effect(() => () => { editor.dispose(); microphone.dispose() }, 'moss.settings-editor')
+  ctx.effect(() => async () => { microphone.dispose(); await editor.dispose() }, 'moss.settings-editor')
   const controller = new VoiceController({
     t, openMedia: (...args) => openMedia(...args, t),
     async connect(id, receive, signal) {
@@ -65,8 +68,14 @@ export function apply(ctx) {
     const selection = settingsForm.getSnapshot().value?.voiceModel
     if (!selection?.provider || !selection?.model) throw Object.assign(new Error(t('index.3')), { code: 'VOICE_NOT_CONFIGURED' })
     const current = controller.getSnapshot()
-    if (!['idle', 'error'].includes(current.phase)) { controller.expand(); return }
+    if (activeVoice(current.phase)) { controller.expand(); return }
     const sessions = ctx.sessions.list.getSnapshot()
+    const existing = voiceTargetId(current, sessions)
+    if (existing) {
+      controller.expand(existing)
+      await controller.start(existing)
+      return
+    }
     const main = Object.values(sessions.byId).find(row => row.retainedBy.mainView > 0)
     const cwd = main?.cwd ?? ctx.workspaces.list.getSnapshot().items[0]?.path
     if (!cwd) throw new Error(t('index.4'))
@@ -79,21 +88,32 @@ export function apply(ctx) {
     await controller.start(result.sessionId)
     } catch (error) { controller.failure(error.message, error.code); throw error }
   }
+  const historyBars = new Map()
   const shared = () => ({
-    hooks: { voice: controller, voiceSettings: settingsForm }, createVoice,
+    hooks: { voice: controller, voiceSettings: settingsForm, voiceSessionList: ctx.sessions.list, voicePanelInfo: ctx.layout.panelInfo }, createVoice,
     openVoicePanel: () => controller.expand(),
     openVoiceSession: id => controller.expand(id),
-    startVoice: id => controller.start(id), stopVoice: () => controller.stop(),
+    startVoice: id => controller.start(id, { minimized: ctx.layout.panelInfo.getSnapshot().activePanelId !== 'moss' }), stopVoice: () => controller.stop(), pauseVoice: () => controller.pause(),
     muteVoice: () => controller.mute(), interruptVoice: () => controller.interrupt(),
     minimizeVoice: () => controller.minimize(), expandVoice: () => controller.expand(),
-    openSettings: () => { controller.minimize(); ctx.shortcuts.invoke('settings.open', { region: 'page', modal: null, target: null }) },
+    openSettings: () => controller.patch({ settingsOpen: true }),
+    mountVoiceHistory: id => {
+      historyBars.set(id, (historyBars.get(id) ?? 0) + 1)
+      controller.patch({ historyBars: [...historyBars.keys()] })
+      if (controller.getSnapshot().sessionId === id) controller.minimize()
+      return () => {
+        const count = historyBars.get(id) - 1
+        if (count) historyBars.set(id, count); else historyBars.delete(id)
+        controller.patch({ historyBars: [...historyBars.keys()] })
+      }
+    },
     mountVoiceView: id => {
       if (controller.getSnapshot().sessionId === id) controller.patch({ minimized: false })
       return () => { if (controller.getSnapshot().sessionId === id) controller.minimize() }
     },
     openNativeConversation: () => {
       const state = controller.getSnapshot()
-      const id = state.viewSessionId ?? state.sessionId
+      const id = voiceTargetId(state, ctx.sessions.list.getSnapshot())
       if (id) ctx.uiWorkspace.openSession(id)
     },
   })
@@ -115,6 +135,10 @@ export function apply(ctx) {
       return result
     },
   })
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({ locale: 'moss', name: 'shell.overlay', id: 'moss-settings', inject: () => {
+    const settings = settingsInjected()
+    return { ...settings, hooks: { ...settings.hooks, voice: controller }, closeSettings: () => controller.patch({ settingsOpen: false }) }
+  } }, SettingsDialog))
   ctx.slots.inject('settings.section', () => ctx.slots.register({ locale: 'moss', name: 'settings.section', id: 'moss', order: 25, label: () => t('index.6'), inject: settingsInjected }, Settings))
   ctx.slots.inject('settings.section.icon', () => ctx.slots.register({ locale: 'moss', name: 'settings.section.icon', id: 'moss' }, MossIcon))
   ctx.slots.inject('plugins.row.config', () => ctx.slots.register({ locale: 'moss', name: 'plugins.row.config', key: 'dsh-moss-live', inject: settingsInjected }, Settings))

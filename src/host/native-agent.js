@@ -68,10 +68,7 @@ class MossAgent {
     this.epoch = epoch
     this.route = selected
     this.session.append('model/selection', this.route)
-    this.ensureTurn()
-    this.session.append('system/message', {
-      turn: this.open.turn, step: 1, message: createSystemMessage(prompt),
-    }, { surfaceOp: 'append' })
+    this.pendingPrompt = prompt
   }
 
   get options() { return this.route }
@@ -84,6 +81,10 @@ class MossAgent {
     this.session.append('turn/start', { turn })
     this.session.append('step/start', { turn, step: 1 })
     this.open = { turn }
+    if (this.pendingPrompt !== undefined) {
+      this.session.append('system/message', { turn, step: 1, message: createSystemMessage(this.pendingPrompt) }, { surfaceOp: 'append' })
+      this.pendingPrompt = undefined
+    }
   }
 
   recordUser({ turn, text }) {
@@ -94,6 +95,7 @@ class MossAgent {
     const key = JSON.stringify([this.epoch, turn])
     const previous = this.inputs.get(key)
     if (previous?.data.content[0]?.text === text) return previous
+    if (!previous) this.ensureTurn()
     const message = previous
       ? { ...previous.data, content: [{ type: 'text', text }] }
       : createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user', voice: { epoch: this.epoch, turn } } })
@@ -176,6 +178,7 @@ async function publish(runtimeCtx, ownerCtx, session, handle, options, source) {
     await ready.promise
     const failures = []
     for (const operation of [
+      async () => { if (finished) await runtimeCtx.get('subagents')?.drainDescendants([agent]) },
       async () => { if (finished) agent.cancel({ kind: 'disposed' }); if (agent) { agent.closed = true; agent.abort.abort() } },
       () => agent?.scope.dispose(),
       () => handle.close(),

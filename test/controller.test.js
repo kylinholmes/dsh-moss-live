@@ -93,3 +93,55 @@ test('orb activity follows actual input/output levels and speaking lasts through
   controller.dispose()
   assert.equal(controller.getSnapshot().energy, 0)
 })
+
+test('muting before connection or microphone grant gates upload and is applied to adopted resources', async t => {
+  for (const moment of ['connection', 'microphone']) await t.test(moment, async () => {
+    const connected = Promise.withResolvers(), granted = Promise.withResolvers()
+    const sent = [], applied = []
+    let upload
+    const connection = { send: data => sent.push(data), close() {} }
+    const controller = new VoiceController({
+      connect: () => connected.promise,
+      openMedia(_format, audio) { upload = audio; return granted.promise },
+    })
+    const starting = controller.start('moss-live-muted')
+    if (moment === 'connection') controller.mute()
+    connected.resolve({ connection, format: {} })
+    await new Promise(resolve => setImmediate(resolve))
+    if (moment === 'microphone') controller.mute()
+    upload(new ArrayBuffer(2))
+    granted.resolve({ mute: value => applied.push(value), dispose() {}, playback: { interruptAll() {} } })
+    await starting
+    upload(new ArrayBuffer(2))
+    assert.equal(sent.filter(value => value instanceof ArrayBuffer).length, 0)
+    assert.equal(sent.at(-1).enabled, false)
+    assert.deepEqual(applied, [true])
+    controller.mute()
+    upload(new ArrayBuffer(2))
+    assert.equal(sent.filter(value => value instanceof ArrayBuffer).length, 1)
+    controller.dispose()
+  })
+})
+
+test('view switches preserve the call; pause and resume release media but retain session identity and mute', async () => {
+  const connected = [], closed = [], released = []
+  const controller = new VoiceController({
+    async connect(id) { connected.push(id); return { connection: { send() {}, close() { closed.push(id) } }, format: {} } },
+    async openMedia() { return { mute() {}, dispose() { released.push(true) }, playback: { interruptAll() {} } } },
+  })
+  await controller.start('moss-live-same')
+  controller.mute(); controller.minimize(); controller.expand()
+  assert.equal(connected.length, 1)
+  assert.equal(closed.length, 0)
+  assert.equal(controller.getSnapshot().muted, true)
+  controller.minimize(); controller.pause()
+  assert.equal(controller.getSnapshot().phase, 'paused')
+  assert.equal(controller.getSnapshot().minimized, true)
+  assert.equal(controller.getSnapshot().sessionId, 'moss-live-same')
+  assert.equal(released.length, 1)
+  await controller.start('moss-live-same')
+  assert.deepEqual(connected, ['moss-live-same', 'moss-live-same'])
+  assert.equal(controller.getSnapshot().muted, true)
+  assert.equal(controller.getSnapshot().phase, 'listening')
+  controller.dispose()
+})
