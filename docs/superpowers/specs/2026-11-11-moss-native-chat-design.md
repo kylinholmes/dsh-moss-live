@@ -8,7 +8,7 @@
 
 ## 已决定的体验
 
-- 同一会话有语音与文本历史视图。主会话固定使用插件设置中选定的 DSH 语音模型，首版仅支持 MOSS `moss-live-1.0`，聊天页无模型选择功能；普通 DSH Agent 会话不受影响。
+- 同一会话有语音与文本历史视图。主会话固定使用插件设置中选定的 DSH 语音模型，首版只实现 MOSS 协议适配，聊天页无模型选择功能；普通 DSH Agent 会话不受影响。模型名按不区分大小写的 `contains moss` 识别，并验证 provider 由 MOSS 适配器提供；不按 `moss-live-1.0` 写死版本，后续版本和快照 ID 均原样传给所选端点。
 - 语音视图提供流体圆球、聆听/思考/回复状态、字幕、静音、打断、结束和收起。支持云蓝和极夜主题，遵循减少动态效果偏好。
 - 收起、进入历史、进入任意子任务或设置时，语音继续连接和播放；悬浮胶囊明确显示 MOSS 身份。只有明确结束、连接故障或插件卸载才释放媒体。
 - 历史优先使用 DSH 原生 Chat。子任务保留原生目录、父子导航、多个任务切换及执行记录，任务卡仅作入口，不能取代任务视角。
@@ -19,30 +19,30 @@
 ## 方案与取舍
 
 1. 独立 Chat 数据库与侧栏覆盖层：实现容易，但重复会话、配置及任务系统，已按用户最新要求排除。
-2. 自定义 Session 写入器与自定义 Agent 驱动：可处理实时协议，但目标 DSH 的 Web 冷恢复默认使用 ReactLoopAgent，需额外维护恢复和写入所有权，暂不采用。
-3. 原生 Agent + MOSS 实时模型适配：优先验证此方案。原生循环独占 Session 写入；MOSS 连接产生用户转写和助手文本，适配层把同一轮响应交给原生 LLM 流，语音音频直接送浏览器播放。没有第二个模型生成回复。它复用持久化、恢复与子 Agent 的真实父级身份。
+2. 实现 DSH Agent 接口的 MOSS 驱动，使用官方 Session 和 SessionPersistence：采用此方案。继承正式导出的 AgentLoop provider，仅按本插件新建的 `moss-live-<uuid>` 会话命名空间分发 create/resume；普通 Agent 调用 super。真实服务测试已验证原生冷恢复、独占写入和子 Agent 父级身份，不需要修改 DSH 核心。
+3. 原生文本循环 + MOSS 实时模型流适配：已排除。MOSS 的用户 input.turn 与助手 turn_id 是不同标识，且存在主动确认和打断；不能用普通请求 FIFO 推断关联，也不应伪造用户输入来保存助手主动回复。
 
-实施从方案 3 的真实 DSH 集成验证开始。验证不通过必须记录原因并调整计划，不能以直接附加日志、伪造子 Agent 元数据或隐藏恢复错误代替。
+方案 2 的基础 provider 在 profile 启动配置中替换唯一的 agent-loop 条目，不能与原 provider 并排注册。基础路由与可启停的语音功能分为独立 Loader 行；关闭语音功能不卸载普通 Agent 的基础 provider。不能以伪造子 Agent 元数据或隐藏恢复错误代替正式流程。
 
 ## 运行结构
 
 - Host `MossRuntime` 管理每个 DSH Session 的实时连接、配置快照、待处理语音轮次和委派。浏览器从已鉴权的 DSH 路由连接；API Key 只在 Host 握手 Authorization 中出现。
-- `MossAdapter` 注册 `moss-live` provider，仅接受 `moss-live-1.0`。它按 Session 与语音轮次交付原生 `StreamChunk`，支持取消、重复事件去重、先到的回复缓冲、断线终结与有界内存。
-- 正式接口创建与恢复原生 Agent，保留独占写入。用户转写通过 Agent Inbox 进入原生循环；助手消息经适配层返回，不手写 `turn/start` 或 `assistant/message`。
-- MOSS 会话用持久化的 Agent 预设身份识别，冷恢复仍固定语音模型。所有可能调用其他模型的请求在 Host 拒绝；UI 只是不提供该动作，不能充当唯一限制。
+- MOSS 模型接入按 provider 的协议适配类型校验，模型 ID 包含 MOSS 即可进入候选，不硬编码版本白名单。供应商返回的模型不支持或协议错误须明确呈现，不能宣称未来版本已经过真实供应商验证。
+- 正式接口创建与恢复 MOSS Agent，由其驱动独占写入标准的 user/message、assistant/message 和 turn/step 事件。使用 SessionPreparation、interruptedTurnClosers 和独占持久化 handle；已发布事件由原生 backend 写入，不能另写同一批日志。用户输入和助手回复按各自原始标识保存，驱动自己递增 DSH 轮次，不关联 input.turn 与助手 turn_id。
+- 会话身份在专用入口新建，不复用普通空白 Agent，不向原生预设目录添加可跨 driver 切换的 MOSS 预设。冷恢复按会话命名空间选择驱动，从原生 model/selection 恢复配置。MOSS Agent.model.select 拒绝所有公开选择（包括同值），阻止普通 API 把 MOSS 写成全局默认模型；只有语音控制器在开始新通话时应用插件选定的模型。
 - 客户端每次 `apply` 创建独立控制器，媒体对象、Socket、定时器和订阅由 Cordis effect 释放。视图组件仅订阅状态。麦克风授权后的过期资源立即停止。
 - 真实 React 组件分别挂到 `sidebar.footer.action`、`conversation.view`、`conversation.composer` 与 `shell.overlay`；使用正式 selector 与 owner props，不扫描或修改宿主 DOM。
 - 不覆盖 DSH 的会话标题、子任务目录及权限确认。自定义 composer 仅匹配 MOSS 主会话，存在 pendingInteraction 时让框架交互继续处理。
 
 ## MOSS 协议
 
-- 端点默认为 `wss://api.mosi.cn/v1/realtime`，模型为 `moss-live-1.0`，握手启用客户端委派。
+- 端点默认为 `wss://api.mosi.cn/v1/realtime`，模型使用 DSH 中选定的原始 ID；`moss-live-1.0` 仅为当前配置示例，握手启用客户端委派。
 - Host 自动组装当前 DSH 人设和适用指令，投影为 MOSS 支持的能力；剔除不存在的本地工具调用承诺。persona 最多 8000，instructions 最多 16000 个 Unicode 字符。
 - 收到 `session_attached` 后配置音色、`session.update` 和音频格式；只在配置成功回执后开放音频上传。配置错误停止输入并给出可操作信息。
-- 输入 PCM16 单声道 16 kHz；输出按端点实际协商格式播放，缺省 PCM16 24 kHz。捕获用 AudioWorklet，文本打包为 Blob 模块，由控制器回收 URL。
+- 输入 PCM16 单声道 16 kHz；输出按端点实际协商格式播放，官方当前缺省为 PCM16 48 kHz。捕获用 AudioWorklet，文本打包为 Blob 模块，由控制器回收 URL。
 - 播放队列逐片段确认。打断先确认已结束的片段，`playback.stopped.played_audio_ms` 仅表示当前未完成队首片段的实际播放时间。
 - 不重放带副作用的委派。以 MOSS delegation id 去重，原生任务记录保留关联关系。失败、取消和断线均清理在途状态；已被 DSH 接受的任务不因切换视图而取消。
-- 每个委派使用 `ctx.subagents.startActivation`，真实 MOSS 父 Agent、配置选中的 Agent 预设和独立任务上下文；`delivery: 'caller'` 避免再次触发普通父模型回复。
+- 每个委派使用 `ctx.subagents.startActivation`，真实 MOSS 父 Agent、配置选中的 Agent 预设和独立任务上下文；显式指定 `agentDefaultModel.currentSelection()` 的非 MOSS route，防止原生 spawn 缺省继承 MOSS。没有普通模型时明确报错。使用 `delivery: 'caller'`；此策略不是原生 durable descriptor 的一部分，恢复后的 parent 通知由 MOSS 驱动作为上下文接收，不启动模型请求。
 - 完成用 `thinking.append` 发送必要事实、`commentary.append` 终结任务。MOSS 协议可能生成简短确认，不能保证绝对静默；不把完整报告作为自动朗读正文发送。
 - 浏览器只发送允许的媒体和播放确认；敏感配置、初始化指令、委派完成由 Host 负责。消息大小、排队长度与 Socket bufferedAmount 都设上限。
 

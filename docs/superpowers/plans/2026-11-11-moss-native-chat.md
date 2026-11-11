@@ -4,7 +4,7 @@
 
 **Goal:** 在真实 DSH 中交付可配置、持久化、可委派子任务的 MOSS 语音 Chat。
 
-**Architecture:** 原生 Agent 独占 Session 写入，MOSS 实时传输作为模型适配层；客户端媒体控制器独立于语音/历史/子任务视图。配置、凭据、Chat 与子任务导航复用 DSH。
+**Architecture:** MOSS 驱动实现 DSH Agent，独占原生 Session 写入；正式 AgentLoop provider 子类按本插件会话命名空间分发 create/resume，普通 Agent 走 super。MOSS provider 向原生 Models 提供模型与连接配置；客户端媒体控制器独立于视图。
 
 **Tech Stack:** Node ESM, Cordis 4.1, DSH 0.2.2-rc.1, Schemastery, React 18, esbuild, ws, node:test, Edge / Playwright。
 
@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - 目标 DSH `0.2.2-rc.1`，不修改现有用户 profile，不向设备部署未验收版。
-- 主模型固定 `moss-live-1.0`；不引入第二个主聊天模型或独立聊天数据库。
+- 聊天页固定使用设置中选定的 DSH 语音模型；按不区分大小写的 `contains moss` 与 MOSS provider 适配能力校验，不写死 1.0。模型 ID 原样传递，不引入第二个主聊天模型或独立聊天数据库。
 - 不扫描宿主 DOM；不覆盖原生子任务导航和 pendingInteraction。
 - API Key 仅由 DSH Credentials 解析后送供应商 Authorization。
 - 配置成功后才能发送麦克风音频；视图卸载不等于语音结束。
@@ -29,15 +29,15 @@
 
 ### Task 1: 真实 DSH 会话适配验证与本地环境
 
-**Files:** Create `scripts/dev-runtime.mjs`, `test/native-session.test.js`, `docs/native-session-spike.md`; test profile置于 `.superpowers/runtime/`。
+**Files:** Create `src/host/native-agent.js`, `src/host/agent-loop.js`, `src/shared/models.js`, `scripts/dev-runtime.mjs`, `test/native-session.test.js`, `docs/native-session-spike.md`; test profile置于 `.superpowers/runtime/`。
 
-**Interfaces:** Consumes DSH `agents.create/resume`、`llm.registerAdapter`、`subagents.startActivation`。Produces `createMossAgent(ctx, {sessionId,cwd})` 的已验证接线方式及 `npm run dev:dsh` 隔离启动命令。
+**Interfaces:** Consumes DSH `agents.create/resume`、`SessionPreparation`、`interruptedTurnClosers`、`subagents.startActivation`。Produces `createMossAgent(runtimeCtx,ownerCtx,options)` / `resumeMossAgent(...)`，其 Agent.voice 提供 configure/user/reply/end，及 `npm run dev:dsh` 隔离启动命令。
 
-- [ ] 创建隔离 rc.1 profile，验证真实框架加载；检查安装版、源码版与测试版身份。
-- [ ] 先写原生持久化/恢复测试：一轮输入只产生一轮输出，重新装载后轮次递增，父级可委派真实任务。
-- [ ] 运行 `node --test test/native-session.test.js`，记录接线缺失的失败。
-- [ ] 用最小 mock Adapter 接入正式服务，验证持久化与冷恢复，记录可行性及必要的宿主扩展。
-- [ ] 同一测试通过后提交验证代码和结论；不可行时更新 Spec/Plan，不绕过 Session 所有权。
+- [x] 创建隔离 rc.1 profile，验证真实框架加载；检查安装版、源码版与测试版身份。
+- [x] 先写原生持久化/恢复测试：一轮输入只产生一轮输出，重新装载后轮次递增，父级可委派真实任务。
+- [x] 运行 `node --test test/native-session.test.js`，记录接线缺失的失败。
+- [x] 用正式 AgentLoop 子类和原生 JSONL backend 验证持久化、冷恢复、两个真实 spawn 子任务与普通模型路径，记录可行性及无需修改核心的结论。
+- [x] 同一测试通过后提交验证代码和结论；不可行时更新 Spec/Plan，不绕过 Session 所有权。
 
 ### Task 2: 配置、鉴权与宿主接线
 
@@ -51,11 +51,11 @@
 - [ ] 测试非法 URL、超限图片、失效预设与积压连接，验证销毁路由后无遗留连接。
 - [ ] 运行 focused tests，通过后提交。
 
-### Task 3: MOSS 实时协议与原生模型适配
+### Task 3: MOSS 实时协议与原生会话驱动
 
 **Files:** Create `src/host/moss-adapter.js`, `src/host/moss-session.js`, `src/host/prompt.js`, `src/shared/protocol.js`; Test `test/moss-session.test.js`, `test/native-session.test.js`。
 
-**Interfaces:** `MossRuntime.start(sessionId)` / `stop(sessionId)`；`MossAdapter.stream(options)` 返回 DSH StreamChunk；协议初始化由 Host 持有。
+**Interfaces:** `MossRuntime.start(sessionId)` / `stop(sessionId)`；MossSession 把实际协议事件交给 Agent.voice；模型目录 Adapter 对普通文字请求明确拒绝，不能让其他请求消费实时回复。
 
 - [ ] 写 mock 端点测试：配置确认前无音频、重复/乱序转写不重复持久化、断线取消待流、错误可见。
 - [ ] 运行 focused tests，确认缺失行为失败。
