@@ -12,6 +12,17 @@ test('ack 三字段齐全', () => {
   assert.deepEqual(ackStopped({ run_id: 'r', turn_id: '1' }, 320), {
     action: 'playback.stopped', run_id: 'r', turn_id: '1', played_audio_ms: 320,
   })
+  assert.deepEqual(ackStopped({ run_id: 'r', turn_id: '1' }), {
+    action: 'playback.stopped', run_id: 'r', turn_id: '1', played_audio_ms: 0,
+  })
+})
+
+test('ack 缺字段时报错', () => {
+  assert.throws(() => ackChunk({ run_id: 'r', turn_id: '1' }), /missing required ack field chunk_id/)
+  assert.throws(() => ackCompleted({ run_id: 'r' }), /missing required ack field turn_id/)
+  assert.throws(() => ackStopped({ run_id: 'r' }), /missing required ack field turn_id/)
+  assert.throws(() => ackChunk({ run_id: '', turn_id: '1', chunk_id: '2' }), /missing required ack field run_id/)
+  assert.throws(() => ackChunk(null), /ack metadata object is required/)
 })
 
 test('字幕是全量替换', () => {
@@ -48,6 +59,24 @@ test('response.audio.stop 清空播放队列', () => {
   assert.equal(r.state.phase, 'listening')
   assert.equal(r.state.playback.length, 0)
   assert.equal(r.effects[0].payload.action, 'playback.stopped')
+  assert.equal(r.effects[0].payload.played_audio_ms, 0)
+})
+
+test('打断时上报真实已播放毫秒', () => {
+  let s = reduce(initialState(), { action: 'response.audio.started', data: { run_id: 'r' } }).state
+  s = reduce(s, { action: 'playback.progress', data: { played_audio_ms: 1840 } }).state
+  assert.equal(s.playedMs, 1840)
+  const r = reduce(s, { action: 'response.audio.stop', data: { run_id: 'r', turn_id: '1' } })
+  assert.equal(r.effects[0].payload.action, 'playback.stopped')
+  assert.equal(r.effects[0].payload.played_audio_ms, 1840)
+  assert.equal(r.state.playedMs, 0)
+})
+
+test('新一轮回复重置已播放毫秒', () => {
+  let s = reduce(initialState(), { action: 'playback.progress', data: { played_audio_ms: 900 } }).state
+  s = reduce(s, { action: 'response.audio.started', data: { run_id: 'r2' } }).state
+  assert.equal(s.playedMs, 0)
+  const r = reduce(s, { action: 'response.audio.stop', data: { run_id: 'r2', turn_id: '2' } })
   assert.equal(r.effects[0].payload.played_audio_ms, 0)
 })
 
