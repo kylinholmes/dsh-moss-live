@@ -1,0 +1,4 @@
+# dsh-moss-live bundle patch：一个宿主行，客户端半通过 package.json 的 dsh.client 声明发现。
+- insert:
+    - id: dsh-moss-live
+      name: 'dsh-moss-live'
