@@ -73,3 +73,12 @@ Three.js 在同一页面经历多次客户端 HMR 后会提示重复实例；卸
 公开仓库和 Release 已获用户授权；Git 全历史（16 个旧提交）已用校验过的 Gitleaks 8.30.1 扫描，无泄漏。手机端 DSH 版本由用户确认同为 0.2.2-rc.1。CI / 预编译 tgz 交付说明见 install.md，安装不要求用户编译。
 
 发布补充验证：干净 `npm ci` 后构建成功，完整测试 67/67 通过。新增四项打包回归覆盖编译入口缺失、tag 与版本不一致、禁止安装时构建 hook、精确产物 SHA256。实际本地 tgz 清单为八个文件，包含三个编译入口、原生 patch、元数据、README、MIT License 和 Three.js 许可证，无源码、测试或开发脚本。Node 最低版本与目标 DSH 自身一致为 24.9.0。GitHub Actions 将执行相同锁定依赖/构建/测试/打包路径。
+
+## v0.2.0 正式交付验证
+
+公开仓库：[kylinholmes/dsh-moss-live](https://github.com/kylinholmes/dsh-moss-live)。发布 tag 指向 `4bdc9dd`，Git 全历史 17 个提交再次扫描，无密钥泄漏。
+
+- [main CI](https://github.com/kylinholmes/dsh-moss-live/actions/runs/43021259070) 和 [tag CI](https://github.com/kylinholmes/dsh-moss-live/actions/runs/43021284760) 均实际完成：Ubuntu、Node 24、锁定依赖安装、构建、67/67 测试、预编译包校验与 artifact 上传全部成功。tag 的 Release job 成功上传同一构建产物。
+- 从 [正式 Release](https://github.com/kylinholmes/dsh-moss-live/releases/tag/v0.2.0) 下载 `.tgz` 和 `SHA256SUMS`，实际字节校验一致：`839a2843f9d465f5ff7a45ba10da6fbc1d220b6c5d9cdf3287d2cdd20eef2819`。安装包 179440 字节，八个文件。
+- 使用新的隔离 DSH_HOME，通过官方 `dsh plugin --profile web add <Release tgz 直链>` 安装成功。原生 profile 自动加入 bundle，配置组合成功，正常启动 Web Host；测试未修改用户 profile。pnpm 提示的宿主 peer 依赖由 DSH 运行时解析，实际加载成功。
+- Edge 加载该安装包后，主页「语音对话」入口和侧栏「MOSS 语音」可见；新建页打开，未配置时显示中文提示，「前往设置」实际打开原生设置弹窗，提供商/模型、外观与委派组件均正常，控制台 error/warning 为零。这一轮没有使用项目源码软链接作为插件来源。
