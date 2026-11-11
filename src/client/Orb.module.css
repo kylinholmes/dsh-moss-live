@@ -1,0 +1,54 @@
+.root {
+  --orb-color: #64b5f6;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--moss-orb-size, clamp(160px, 29dvh, 290px));
+  max-width: 100%;
+  aspect-ratio: 1;
+  flex: none;
+  isolation: isolate;
+  outline: 0;
+  border-radius: 50%;
+  corner-shape: round;
+  cursor: grab;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.root:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 6px; }
+.root[data-grabbing="true"] { cursor: grabbing; }
+.canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+.image { display: block; width: 84%; height: 84%; border-radius: 50%; corner-shape: round; clip-path: circle(50% at 50% 50%); object-fit: cover; object-position: center; pointer-events: none; transition: transform 180ms ease; }
+.imageRoot:hover .image { transform: scale(1.025); }
+.imageRoot:active .image { transform: scale(.96); }
+.imageRoot[data-poked="true"] .image { animation: imageTouch 650ms cubic-bezier(.18,.74,.25,1); }
+.fallback {
+  position: absolute;
+  inset: 10%;
+  overflow: hidden;
+  border-radius: 48% 52% 50% 49%;
+  corner-shape: round;
+  background: radial-gradient(ellipse at 28% 23%, color-mix(in srgb, var(--orb-color) 6%, white), color-mix(in srgb, var(--orb-color) 58%, white) 56%, color-mix(in srgb, var(--orb-color) 77%, black) 100%);
+  animation: mistDrift 11s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+.fallback::before,
+.fallback::after { content: ''; position: absolute; inset: -9%; border-radius: 40% 50% 46% 53%; background: radial-gradient(ellipse at 22% 30%, #fff 0 12%, transparent 40%), radial-gradient(ellipse at 72% 62%, #fff9 0 16%, transparent 40%); filter: blur(9px); animation: mistDrift 9s ease-in-out infinite alternate-reverse; }
+.fallback::after { transform: rotate(90deg); opacity: .55; animation-duration: 14s; }
+.root[data-poked="true"] .fallback { animation: cloudTouch 650ms ease-out, mistDrift 11s ease-in-out infinite alternate; }
+.small { width: 26px; height: 26px; cursor: inherit; pointer-events: none; }
+.small .fallback { inset: 1%; animation: none; }
+.small .fallback::before,
+.small .fallback::after { animation: none; filter: blur(2px); }
+.small .image { width: 100%; height: 100%; }
+@keyframes mistDrift { from { transform: rotate(-8deg) scale(.98); border-radius: 47% 52% 49% 51%; } to { transform: rotate(11deg) scale(1.025); border-radius: 52% 47% 52% 46%; } }
+@keyframes imageTouch { 0% { transform: scale(.94); } 38% { transform: scale(1.055); } 70% { transform: scale(.99); } 100% { transform: scale(1); } }
+@keyframes cloudTouch { 0% { scale: .93; } 40% { scale: 1.09; } 100% { scale: 1; } }
+@media (max-width: 600px) { .root { width: var(--moss-orb-size, clamp(165px, 28dvh, 260px)); } .small { width: 26px; } }
+@media (max-height: 570px) { .root { width: var(--moss-orb-size, 145px); } .small { width: 26px; } }
+@media (prefers-reduced-motion: reduce) {
+  .fallback, .fallback::before, .fallback::after, .image { animation: none !important; transition: none !important; }
+  .root[data-poked="true"] { opacity: .85; }
+  .imageRoot:hover .image, .imageRoot:active .image { transform: none; }
+}

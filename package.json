@@ -1,17 +1,22 @@
 {
   "name": "dsh-moss-live",
-  "version": "0.1.0",
-  "description": "MOSS-Live 1.0 全双工实时语音对话：极简毛玻璃面板，边听边说，可自然打断",
+  "version": "0.2.0",
+  "description": "集成原生 DSH Session、Models 和子 Agent 的 MOSS 实时语音会话",
   "type": "module",
   "scripts": {
     "test": "node --test test/*.test.js",
+    "build": "node scripts/build-host.mjs && node scripts/build-client.mjs",
     "setup:dsh": "node scripts/dev-runtime.mjs --setup",
-    "dev:dsh": "node scripts/dev-runtime.mjs"
+    "dev:dsh": "node scripts/dev-runtime.mjs",
+    "setup:acceptance": "node scripts/dev-runtime.mjs --setup --acceptance",
+    "dev:acceptance": "node scripts/dev-runtime.mjs --acceptance",
+    "preview:orb": "node scripts/preview-orb.mjs"
   },
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
+    "./agent-loop": "./lib/agent-loop.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
@@ -26,7 +31,17 @@
     },
     "client": {
       "platform": "web",
-      "inject": []
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-workspace",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-plugin-manager",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-shortcuts"
+      ]
     }
   },
   "dependencies": {
@@ -38,12 +53,16 @@
     "@deepseek-ai/dsh-agent-loop": "0.2.2-rc.1",
     "@deepseek-ai/dsh-llm": "0.2.2-rc.1",
     "@deepseek-ai/dsh-scope": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-session": "0.2.2-rc.1"
+    "@deepseek-ai/dsh-session": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-system-prompt": "0.2.2-rc.1",
+    "@deepseek-ai/schemastery": "3.19.0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.1.0",
+    "@deepseek-ai/cordis-plugin-include": "^1.1.0",
     "@deepseek-ai/dsh-agent": "0.2.2-rc.1",
     "@deepseek-ai/dsh-agent-loop": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.2.2-rc.1",
     "@deepseek-ai/dsh-client-ui-slots": "^0.2.2-rc.1",
     "@deepseek-ai/dsh-fs-local": "0.2.2-rc.1",
     "@deepseek-ai/dsh-llm": "0.2.2-rc.1",
@@ -59,8 +78,10 @@
     "@deepseek-ai/dsh-working-directory": "0.2.2-rc.1",
     "@deepseek-ai/schemastery": "3.19.0",
     "esbuild": "^0.25.12",
+    "js-yaml": "^4.1.0",
     "jsdom": "^26.1.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "three": "^0.181.2"
   }
 }

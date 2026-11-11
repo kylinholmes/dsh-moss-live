@@ -2,7 +2,7 @@ import { createScope } from '@deepseek-ai/dsh-scope'
 import { agentEvents } from '@deepseek-ai/dsh-agent'
 import { interruptedTurnClosers, SessionPreparation } from '@deepseek-ai/dsh-session'
 import { createUserMessage, createAssistantMessage, createSystemMessage, AssistantStreamAccumulator } from '@deepseek-ai/dsh-llm'
-import { mossRoute } from '../shared/models.js'
+import { voiceRoute } from '../shared/models.js'
 
 /** A driver-owned namespace; native preset selection never changes the driver. */
 export const isMossSession = id => typeof id === 'string' && id.startsWith('moss-live-')
@@ -10,7 +10,7 @@ export const isMossSession = id => typeof id === 'string' && id.startsWith('moss
 /** MOSS owns this Agent's log; the ordinary text loop never writes to it. */
 class MossAgent {
   constructor(runtimeCtx, session, route) {
-    this.route = mossRoute(route)
+    this.route = voiceRoute(route)
     this.id = session.id
     this.session = session
     this.scope = createScope(runtimeCtx, this)
@@ -63,7 +63,7 @@ class MossAgent {
   configure({ epoch, prompt, route }) {
     this.assertLive()
     if (typeof epoch !== 'string' || !epoch) throw new TypeError('MOSS connection epoch is required')
-    const selected = mossRoute(route)
+    const selected = voiceRoute(route)
     this.endTurn({ kind: 'completed' })
     this.epoch = epoch
     this.route = selected

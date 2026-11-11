@@ -1,4 +1,13 @@
-# dsh-moss-live bundle patch：一个宿主行，客户端半通过 package.json 的 dsh.client 声明发现。
+# `name` is a guard in DSH patches, not a module replacement operation.
+# Disable the stock provider and insert its subclass as the only active factory.
+- id: agent-loop
+  name: '@deepseek-ai/dsh-agent-loop'
+  disabled: true
+
 - insert:
+    - id: moss-agent-loop
+      name: 'dsh-moss-live/agent-loop'
+      config:
+        agents: []
     - id: dsh-moss-live
       name: 'dsh-moss-live'

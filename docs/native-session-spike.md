@@ -8,10 +8,10 @@
 - 标准 user/message 与 assistant/message 在 flush、关闭、重新 open 后保留。恢复时需要持久化 Session.prepare 生成的额外事件，不能漏掉后续 seq。
 - 用户语音 ID 与助手回复 ID 分开保存，MOSS driver 独立递增 DSH turn。重复终态不会重复写回复；跨 Socket epoch 可以重新使用供应商原始 ID。
 - 通过正式 AgentLoop 子类覆盖 createAgent/resume，可以在原生 Registry 的调用者追踪下路由 MOSS；普通 Agent 继续使用官方实现，冷恢复仍进入正确 driver。
-- 同一个真实 MOSS 父 Agent 能建立两个独立 spawn 子任务；显式传普通模型后，两任务各调用模型一次，父 Agent 不调用模型，结果经 caller delivery 返回。
+- 同一个真实 MOSS 父 Agent 能建立两个独立 spawn 子任务；显式传普通模型后，两任务各调用模型一次，父 Agent 不调用模型。最终采用 parent delivery：被动 inbox 保存原生任务通知，冷恢复保留上下文；activation.result 同时用于协议回传。
 - model.select 对异值和同值均拒绝，防止原生 API 在选择 MOSS 后污染全局默认模型。所选 `moss-live-2.0` 和 `vendor/MOSS-Live-2.0-preview` 在创建、历史和恢复中原样保留。
 
-命令：`node --test test/native-session.test.js`，7/7 通过，另包含失败 setup 释放独占写 handle、owner 在异步 setup 中卸载后不发布迟到 Agent。该结果不代表 MOSS 网络、真实麦克风、完整 Web UI 或设置页已验证。
+命令：`node --test test/native-session.test.js`，7/7 通过，另包含失败 setup 释放独占写 handle、owner 在异步 setup 中卸载后不发布迟到 Agent。此技术验证本身不代表 MOSS 网络、真实麦克风、完整 Web UI 或设置页已验证；后续独立结果见 [验收记录](verification.md)。
 
 ## 实施决定
 

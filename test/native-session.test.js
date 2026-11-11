@@ -190,7 +190,7 @@ test('one official AgentLoop provider routes MOSS and leaves ordinary Agent exec
   assert.equal(modelCalls, 1, JSON.stringify(ordinary.agent.session.snapshotEvents().filter(event => event.type === 'turn/end')))
   assert.ok(ordinary.agent.session.snapshotEvents().some(event => event.type === 'assistant/message'))
   const tasks = await Promise.all(['整理明日安排', '查阅会议资料'].map(label => ctx.subagents.startActivation({
-    provider: 'spawn', label, delivery: 'caller', signal: new AbortController().signal,
+    provider: 'spawn', label, delivery: 'parent', signal: new AbortController().signal,
     request: {
       parent: moss.agent, cwd: root,
       prompt: [{ type: 'text', text: label }],
@@ -201,10 +201,12 @@ test('one official AgentLoop provider routes MOSS and leaves ordinary Agent exec
   const results = await Promise.all(tasks.map(task => task.result))
   assert.equal(modelCalls, 3, 'two children must call the ordinary model; MOSS parent must stay silent')
   for (const result of results) assert.ok(result.output.some(block => block.type === 'text' && block.text === 'ordinary reply'))
+  assert.equal(moss.agent.session.deriveMessages().filter(message => message.source?.kind === 'subagent-settled').length, 2)
   assert.equal(moss.agent.session.snapshotEvents().filter(event => event.type === 'assistant/message').length, 0)
   await ordinary.dispose()
   await moss.dispose()
   const restored = await ctx.agents.resume({ resumeSessionId: 'moss-live-routed' })
   assert.ok(restored.agent.voice, 'native registry cold resume must select the MOSS driver')
+  assert.equal(restored.agent.session.deriveMessages().filter(message => message.source?.kind === 'subagent-settled').length, 2)
   await restored.dispose()
 })
