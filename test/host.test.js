@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  createUpgradeServer,
   sameOrigin,
   resolveKey,
   registerRoutes,
@@ -138,4 +139,10 @@ test('关闭原因按字节截断', () => {
   assert.ok(Buffer.byteLength(cut, 'utf8') <= 123)
   assert.equal(Buffer.byteLength(cut, 'utf8'), 123)
   assert.equal(cut, '中'.repeat(41))
+})
+
+test('升级服务器用的是 ws 命名导出的 WebSocketServer', () => {
+  const server = createUpgradeServer()
+  assert.equal(typeof server.handleUpgrade, 'function')
+  server.close()
 })
