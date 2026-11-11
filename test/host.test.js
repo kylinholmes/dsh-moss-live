@@ -75,8 +75,10 @@ test('路由常量固定', () => {
 test('注册路由、配置响应与幂等释放', () => {
   const { web, routes, removed } = fakeWeb()
   const dispose = registerRoutes({}, web, { model: 'moss-test', voice: 'v' })
-  assert.equal(routes.length, 2)
-  const [http, upgrade] = routes
+  // 2 个正式路由 + 1 个临时诊断路由（面板布局定位用，问题解决后删除）
+  assert.equal(routes.length, 3)
+  const [http, diag, upgrade] = routes
+  assert.equal(diag[1].path, '/dsh-moss-live/diag')
   assert.equal(http[1].kind, 'exact')
   assert.equal(http[1].path, CONFIG_PATH)
   assert.equal(upgrade[1].path, WS_PATH)
@@ -91,7 +93,7 @@ test('注册路由、配置响应与幂等释放', () => {
 
   dispose()
   dispose()
-  assert.deepEqual(removed.sort(), ['http', 'upgrade'])
+  assert.deepEqual(removed.sort(), ['http', 'http', 'upgrade'])
 })
 
 test('配置路由放行无 Origin 请求、拒绝异源 Origin', () => {
