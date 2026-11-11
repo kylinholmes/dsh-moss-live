@@ -40,8 +40,11 @@ test('说话状态迁移', () => {
   assert.equal(thinking.phase, 'thinking')
   const speaking = reduce(thinking, { action: 'response.audio.started', data: { run_id: 'r' } }).state
   assert.equal(speaking.phase, 'speaking')
-  const ended = reduce(speaking, { action: 'response.ended', data: {} }).state
+  const played = reduce(speaking, { action: 'playback.progress', data: { played_audio_ms: 640 } }).state
+  assert.equal(played.playedMs, 640)
+  const ended = reduce(played, { action: 'response.ended', data: {} }).state
   assert.equal(ended.phase, 'listening')
+  assert.equal(ended.playedMs, 0)
 })
 
 test('audio.context 记下归属，下一条二进制帧用它', () => {
@@ -60,6 +63,19 @@ test('response.audio.stop 清空播放队列', () => {
   assert.equal(r.state.playback.length, 0)
   assert.equal(r.effects[0].payload.action, 'playback.stopped')
   assert.equal(r.effects[0].payload.played_audio_ms, 0)
+})
+
+test('stop 缺 ack id 时不抛错也不发确认', () => {
+  const r = reduce(initialState(), { action: 'response.audio.stop', data: {} })
+  assert.equal(r.state.phase, 'listening')
+  assert.equal(r.state.playback.length, 0)
+  assert.equal(r.state.playedMs, 0)
+  assert.equal(r.effects.some(effect => effect.kind === 'send'), false)
+  assert.deepEqual(r.effects, [{ kind: 'warn', message: 'stop event missing ack ids' }])
+
+  const partial = reduce(initialState(), { action: 'response.audio.stop', data: { run_id: 'r' } })
+  assert.equal(partial.state.phase, 'listening')
+  assert.equal(partial.effects.some(effect => effect.kind === 'send'), false)
 })
 
 test('打断时上报真实已播放毫秒', () => {
@@ -81,8 +97,11 @@ test('新一轮回复重置已播放毫秒', () => {
 })
 
 test('错误事件产出退出效果', () => {
-  const r = reduce(initialState(), { action: 'error', data: { error: { code: 'invalid_public_request' } } })
+  const playing = reduce(initialState(), { action: 'playback.progress', data: { played_audio_ms: 320 } }).state
+  assert.equal(playing.playedMs, 320)
+  const r = reduce(playing, { action: 'error', data: { error: { code: 'invalid_public_request' } } })
   assert.equal(r.state.phase, 'error')
+  assert.equal(r.state.playedMs, 0)
   assert.equal(r.effects[0].kind, 'exit')
   assert.equal(r.effects[0].message, 'invalid_public_request')
 })
