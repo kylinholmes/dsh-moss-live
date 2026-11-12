@@ -15,3 +15,15 @@ test('voice target restores the native selected session after a page or plugin r
   child.byId.child.parentId = 'moss-live-parent'
   assert.equal(voiceTargetId({ phase: 'idle' }, child), 'moss-live-parent')
 })
+
+test('nested native child views retain the nearest voice ancestor without looping through corrupt ancestry', async () => {
+  const { voiceTargetId } = await import('../src/client/voice-target.js')
+  const sessions = { byId: {
+    'moss-live-parent': { id: 'moss-live-parent' },
+    child: { id: 'child', parentId: 'moss-live-parent' },
+    grandchild: { id: 'grandchild', parentId: 'child', retainedBy: { mainView: 1 } },
+  } }
+  assert.equal(voiceTargetId(null, sessions), 'moss-live-parent')
+  sessions.byId.child.parentId = 'grandchild'
+  assert.equal(voiceTargetId(null, sessions), null, 'a broken native catalog cannot cause an infinite loop')
+})

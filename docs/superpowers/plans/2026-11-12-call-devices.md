@@ -31,9 +31,9 @@ Files: `src/client/voice-sessions.js`, `controller.js`, `voice-target.js`, `test
 
 Interfaces: VoiceSessions.get(id) → VoiceController; select(id|null), start(id), pause(id), mute(id), stop(id), stopAll(), dispose(); snapshot `{selectedId,calls,...UI}`。voiceCallState(snapshot,id) 返回该通话状态。原 VoiceController 继续只管理一通。
 
-- [ ] 写 A/B 独立字幕/静音/暂停恢复、普通会话清空选择、迟授权/失败隔离测试，先运行观察失败。
-- [ ] 实现注册表，恢复同一通话时保留字幕；原生选择不退回上一通。
-- [ ] `node --test test/controller.test.js test/voice-sessions.test.js test/voice-target.test.js` 全通过后提交。
+- [x] 写 A/B 独立字幕/静音/暂停恢复、普通会话清空选择、迟授权/失败隔离测试，先运行观察失败。
+- [x] 实现注册表，恢复同一通话时保留字幕；原生选择不退回上一通。
+- [x] `node --test test/controller.test.js test/voice-sessions.test.js test/voice-target.test.js` 全通过后提交。
 
 ### Task 2: 输出设备
 
@@ -41,15 +41,15 @@ Files: `src/client/audio-output.js`, `browser.js`, `test/audio-output.test.js`, 
 
 Interfaces: AudioOutput 外部 store；open/close/refresh/authorize/select，attach(media) 返回解绑函数；媒体提供 `setOutputDevice(id)`。持有的媒体释放后解绑。
 
-- [ ] 写实际设备路由、未来媒体继承、拒绝/拔出回退和注销资源测试，运行确认缺失功能失败。
-- [ ] 实现本地偏好、能力检测、设备变更监听与媒体 setSinkId。
-- [ ] `node --test test/audio-output.test.js test/browser-media.test.js` 全通过后提交。
+- [x] 写实际设备路由、未来媒体继承、拒绝/拔出回退和注销资源测试，运行确认缺失功能失败。
+- [x] 实现本地偏好、能力检测、设备变更监听与媒体 setSinkId。
+- [x] `node --test test/audio-output.test.js test/browser-media.test.js` 全通过后提交。
 
 ### Task 3: 原生 UI 与交付
 
 Files: `index.jsx`, `VoiceView.jsx`, `VoiceControls.jsx`, `Composer.jsx`, `Overlay.jsx`, `AudioOutputDialog.jsx`, `styles.module.css`, `locales.ts`, `test/ui.test.js`, 文档及版本。
 
-- [ ] UI 回归先证明普通文本仍显示旧通话条、控制动作未携带 Session id。
-- [ ] 订阅原生 session/panel，按明确目标传递控制动作；新增官方设备弹窗与按钮。
-- [ ] 完整 build/test；隔离 Edge 验证 A/B/文本/子任务、迟授权、设备切换及 320px 布局。
-- [ ] 独立最终审查，修复重要问题，更新验收记录；发布新版本，不覆盖 v0.2.0 资产。
+- [x] UI 回归先证明普通文本仍显示旧通话条、控制动作未携带 Session id。
+- [x] 订阅原生 session/panel，按明确目标传递控制动作；新增官方设备弹窗与按钮。
+- [x] 完整 build/test；隔离 Edge 验证 A/B/文本/子任务、迟授权、设备切换及 320px 布局。
+- [ ] 独立最终审查已完成，两项 Important 已 RED→GREEN 修复；待 CI 发布并核对新版本，不覆盖 v0.2.0 资产。

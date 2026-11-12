@@ -102,3 +102,22 @@ test('output permission is requested by a user action and fallback microphone tr
   assert.equal(stopped, 1)
   output.dispose()
 })
+
+test('a device refresh cannot overwrite a newer valid output selected while switching was pending', async () => {
+  const { output, devices } = setup('headset')
+  const switching = Promise.withResolvers(), routed = []
+  await output.attach({ async setOutputDevice(id) {
+    routed.push(id)
+    if (id === 'speaker') await switching.promise
+  } })
+  const choice = output.select('speaker')
+  await new Promise(resolve => setImmediate(resolve))
+  devices.rows = devices.rows.filter(row => row.deviceId !== 'headset')
+  const refreshed = output.refresh()
+  await new Promise(resolve => setImmediate(resolve))
+  switching.resolve()
+  await Promise.all([choice, refreshed])
+  assert.equal(output.getSnapshot().selectedId, 'speaker')
+  assert.deepEqual(routed, ['headset', 'speaker'], 'an old refresh must not route a valid newly selected device back to default')
+  output.dispose()
+})

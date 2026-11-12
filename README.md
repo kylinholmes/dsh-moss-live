@@ -1,6 +1,6 @@
 # DSH MOSS Live
 
-MOSS 实时语音插件，目标版本为 DSH **0.2.2-rc.1**。会话、历史、凭据、设置和子 Agent 复用 DSH。收起语音或进入历史、子任务时继续连接；主动暂停、明确结束或插件卸载时释放媒体。不保存原始麦克风音频。
+MOSS 实时语音插件，目标版本为 DSH **0.2.2-rc.1**。会话、历史、凭据、设置和子 Agent 复用 DSH。同一通话的语音页、历史与子任务切换继续连接；换到另一主会话时自动暂停，各自独立恢复。不保存原始麦克风音频。
 
 ## 下载安装
 
@@ -11,10 +11,10 @@ MOSS 实时语音插件，目标版本为 DSH **0.2.2-rc.1**。会话、历史�
 3. 在「设置 → 模型」配置 API，再进入「设置 → MOSS 语音」选择语音模型并测试连接。
 
 ```text
-https://github.com/kylinholmes/dsh-moss-live/releases/download/v0.2.0/dsh-moss-live-0.2.0.tgz
+https://github.com/kylinholmes/dsh-moss-live/releases/download/v0.2.1/dsh-moss-live-0.2.1.tgz
 ```
 
-[下载 v0.2.0 安装包](https://github.com/kylinholmes/dsh-moss-live/releases/download/v0.2.0/dsh-moss-live-0.2.0.tgz) · [SHA256 校验和](https://github.com/kylinholmes/dsh-moss-live/releases/download/v0.2.0/SHA256SUMS) · [全部版本](https://github.com/kylinholmes/dsh-moss-live/releases) · [完整安装与升级说明](docs/install.md)
+[下载 v0.2.1 安装包](https://github.com/kylinholmes/dsh-moss-live/releases/download/v0.2.1/dsh-moss-live-0.2.1.tgz) · [SHA256 校验和](https://github.com/kylinholmes/dsh-moss-live/releases/download/v0.2.1/SHA256SUMS) · [全部版本](https://github.com/kylinholmes/dsh-moss-live/releases) · [完整安装与升级说明](docs/install.md)
 
 手机浏览器直接粘贴直链即可，由 DSH 宿主下载安装。GitHub 自动生成的 Source code 压缩包和 Actions artifact ZIP 不是可直接填入 DSH 的安装包。
 
@@ -24,8 +24,9 @@ https://github.com/kylinholmes/dsh-moss-live/releases/download/v0.2.0/dsh-moss-l
 2. 在「设置 → MOSS 语音」分别选择提供商、模型，执行「测试连接」。测试验证鉴权、会话配置及音频格式，同时尝试申请麦克风；权限与检测状态单独显示。
 3. 分别选择委派的 Agent 预设与执行模型，执行模型可跟随 DSH 默认聊天模型。子任务不能使用与主语音相同的 route。
 4. 设置自动保存。球体支持交互与音量反馈；选择图片模式才显示上传入口。PNG/JPEG/WebP 图片最多 256 KiB，居中以圆形显示。
-5. 侧栏「MOSS 语音」或首页输入区打开新对话入口，按「开始语音」才创建新 Session。已有通话可在后台继续，进入入口不会结束它。通过「历史与子任务」查看原生记录和父子导航；历史页控制栏与最小化条返回对应的原会话，沿用连接。暂停后控件保留，恢复原 Session。
+5. 侧栏「MOSS 语音」或首页输入区打开新对话入口，按「开始语音」才创建新 Session。每个语音 Session 独立保存状态；切到另一主会话或新建页时自动暂停原通话，切回后点击恢复。同一通话的语音页、历史与子任务互切不重连。普通文本会话不显示语音控制条。
 6. 连接错误旁的「前往设置」直接打开 DSH 原生弹窗，与侧栏 MOSS 设置共用组件、配置和自动保存。
+7. 语音控制栏的「输出设备」按钮可选择当前浏览器可用的扬声器/耳机，偏好只保存在本浏览器。切换失败保留原输出，拔出设备回退到系统默认；浏览器不支持时按提示通过系统声音设置选择。
 
 插件不按模型名、版本或提供商筛选，仅适配 MOSS 实时协议。配置缺失显示「未配置」，实际协议不支持显示「不兼容」。主聊天页固定语音模型；不显示文字输入，不会私自路由到另一个模型。
 

@@ -1,6 +1,6 @@
 {
   "name": "dsh-moss-live",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "集成原生 DSH Session、Models 和子 Agent 的 MOSS 实时语音会话",
   "type": "module",
   "scripts": {

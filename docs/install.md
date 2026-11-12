@@ -8,7 +8,7 @@
 2. 点击「添加插件」主按钮，在「包名或地址」输入：
 
    ```text
-   https://github.com/kylinholmes/dsh-moss-live/releases/download/v0.2.0/dsh-moss-live-0.2.0.tgz
+   https://github.com/kylinholmes/dsh-moss-live/releases/download/v0.2.1/dsh-moss-live-0.2.1.tgz
    ```
 
 3. 点击「安装」。安装完成后点击「立即启用」。如 DSH 提示需要重启，按该提示重启当前 profile。
@@ -27,7 +27,7 @@
 在运行 DSH 的宿主终端执行，`web` 应与自己正在使用的 profile 一致：
 
 ```sh
-dsh plugin --profile web add https://github.com/kylinholmes/dsh-moss-live/releases/download/v0.2.0/dsh-moss-live-0.2.0.tgz
+dsh plugin --profile web add https://github.com/kylinholmes/dsh-moss-live/releases/download/v0.2.1/dsh-moss-live-0.2.1.tgz
 ```
 
 也可下载 Release 中的 `.tgz` 后，将其**宿主绝对路径**填入 DSH「添加插件」或作为 CLI `add` 参数。预编译包由 DSH 的原生包管理器安装运行依赖，不需要自行执行 `npm install` 或 `npm run build`。
@@ -38,11 +38,13 @@ API URL、API Key 和模型目录始终保存在 DSH 原生 Models/Credentials �
 
 官方 Live 示例：原生 API base URL 为 `https://api.mosi.cn/v1`，模型 ID 为 `moss-live-1.0`。插件映射到对应实时 WebSocket 地址，凭据只由宿主解析。其他模型以测试连接结果为准。参考 [MOSS Live 协议](https://platform.moss.cn/docs/reference/moss-live/)。
 
-侧栏「MOSS 语音」与首页入口用于开始新对话；打开入口不会结束现有通话，按「开始语音」才创建 Session。历史页控制栏和最小化条返回对应原会话。历史、子任务目录和权限确认由 DSH 保存和展示；媒体只在暂停、结束、失败或卸载时释放。
+侧栏「MOSS 语音」与首页入口用于开始新对话，按「开始语音」才创建 Session。每个语音 Session 独立，换到另一主会话或新建入口会暂停前一通，切回后点击恢复；各自保留字幕和静音状态。同一通话的语音页、历史及所属子任务互切保持连接，普通文本会话不显示语音控制条。历史、子任务目录和权限确认由 DSH 保存和展示。
+
+「输出设备」按钮在语音页、历史控制栏均可用，可在通话期间切换浏览器提供的音频输出。选择只保存在当前浏览器，失败保留原设备、拔出时回退系统默认；移动浏览器若没有暴露输出切换接口，请使用手机系统控制中心选择耳机/扬声器。
 
 ## 校验下载内容
 
-每个 Release 同时提供安装包和 [SHA256SUMS](https://github.com/kylinholmes/dsh-moss-live/releases/download/v0.2.0/SHA256SUMS)。把两个文件放在同一目录，可在 Linux 或 Termux 中执行：
+每个 Release 同时提供安装包和 [SHA256SUMS](https://github.com/kylinholmes/dsh-moss-live/releases/download/v0.2.1/SHA256SUMS)。把两个文件放在同一目录，可在 Linux 或 Termux 中执行：
 
 ```sh
 sha256sum --check SHA256SUMS
@@ -53,7 +55,7 @@ macOS 使用 `shasum -a 256 --check SHA256SUMS`。
 Windows PowerShell 可查看文件哈希，并与 `SHA256SUMS` 对照：
 
 ```powershell
-Get-FileHash .\dsh-moss-live-0.2.0.tgz -Algorithm SHA256
+Get-FileHash .\dsh-moss-live-0.2.1.tgz -Algorithm SHA256
 ```
 
 ## 升级与停用
