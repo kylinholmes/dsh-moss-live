@@ -27,3 +27,10 @@ gpt-6-astra high 只读审查 `dd2413a..4132c15`，无 Critical、两项 Importa
 README、产品要求和安装文档已更新为新的独立暂停行为，旧验收记录保留其日期语义。
 
 输出偏好只存当前浏览器，不存共享 DSH 配置。实体耳机拔插、手机听筒/扬声器路由和持续真人通话没有硬件条件实测；取决于浏览器暴露的能力，不能由模拟测试推定通过。
+
+## 正式发布
+
+- [main CI](https://github.com/kylinholmes/dsh-moss-live/actions/runs/43142048877) 与 [v0.2.1 tag CI](https://github.com/kylinholmes/dsh-moss-live/actions/runs/43142068132) 均成功，tag 完成 Release 资产发布，78 项测试全部通过。
+- 从 [v0.2.1 Release](https://github.com/kylinholmes/dsh-moss-live/releases/tag/v0.2.1) 实际下载包与 SHA256SUMS，字节哈希匹配：`a4f93ab2e809fabfa818f7cafb1ae4f392f4b45553761d013d167b4aeb897702`。
+- 对上次隔离安装的 v0.2.0 profile 执行原生 CLI add 新 Release 直链，升级为 0.2.1 成功。实际启动 Web Host，Edge 显示新输出按钮和官方 Modal，冷页面控制台 error/warning 均为 0。该轮使用下载的安装包，不使用源码链接。
+- 完整 Git 历史扫描无密钥泄漏；不改动 v0.2.0 tag 或其资产，不修改用户的 DSH profile。

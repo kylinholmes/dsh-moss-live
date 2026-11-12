@@ -52,4 +52,4 @@ Files: `index.jsx`, `VoiceView.jsx`, `VoiceControls.jsx`, `Composer.jsx`, `Overl
 - [x] UI 回归先证明普通文本仍显示旧通话条、控制动作未携带 Session id。
 - [x] 订阅原生 session/panel，按明确目标传递控制动作；新增官方设备弹窗与按钮。
 - [x] 完整 build/test；隔离 Edge 验证 A/B/文本/子任务、迟授权、设备切换及 320px 布局。
-- [ ] 独立最终审查已完成，两项 Important 已 RED→GREEN 修复；待 CI 发布并核对新版本，不覆盖 v0.2.0 资产。
+- [x] 独立最终审查已完成，两项 Important 已 RED→GREEN 修复；v0.2.1 CI 全绿，正式包 SHA256 核对及隔离原生升级成功，未覆盖 v0.2.0 资产。见验收补充。
