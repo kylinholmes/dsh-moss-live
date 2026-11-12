@@ -50,17 +50,25 @@ export function connect(sessionId, receive, signal, t = key => key) {
 }
 
 export async function openMedia(format, onAudio, send, signal, onLevels = () => {}, t = key => key) {
-  let stream, context, node, source, silent, url, playback, meter, inputLevel = 0
+  let stream, context, node, source, silent, url, playback, meter, inputLevel = 0, disposed = false
   const dispose = () => {
+    disposed = true
+    signal.removeEventListener('abort', dispose)
     clearInterval(meter)
     if (node) node.port.onmessage = null
     node?.disconnect(); source?.disconnect(); silent?.disconnect()
+    node = source = silent = null
     stream?.getTracks().forEach(track => track.stop())
+    stream = null
     playback?.dispose()
+    playback = null
     if (url) { URL.revokeObjectURL(url); url = null }
     if (context && context.state !== 'closed') void context.close().catch(() => {})
+    context = null
   }
+  signal.addEventListener('abort', dispose, { once: true })
   try {
+    signal.throwIfAborted()
     stream = await requestMicrophone(navigator.mediaDevices, { audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } }, t)
     signal.throwIfAborted()
     const Audio = globalThis.AudioContext ?? globalThis.webkitAudioContext
@@ -86,7 +94,13 @@ export async function openMedia(format, onAudio, send, signal, onLevels = () => 
     }
     playback = new Playback(context, send, format.outputSampleRate, t)
     meter = setInterval(() => { if (!signal.aborted) onLevels({ inputLevel, outputLevel: playback.level(), playing: playback.seconds > 0 }) }, 80)
-    return { playback, dispose, mute(value) { stream.getAudioTracks().forEach(track => { track.enabled = !value }) } }
+    return { playback, dispose, mute(value) { stream?.getAudioTracks().forEach(track => { track.enabled = !value }) },
+      async setOutputDevice(id) {
+        if (disposed) throw new DOMException('Media was released', 'AbortError')
+        if (typeof context.setSinkId === 'function') await context.setSinkId(id)
+        else if (id) throw new Error(t('output.unsupported'))
+      },
+    }
   } catch (error) {
     dispose()
     throw error
