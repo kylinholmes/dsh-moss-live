@@ -15,13 +15,15 @@ export class VoiceController {
   async start(sessionId, { minimized = this.snapshot.minimized } = {}) {
     if (this.disposed) return
     if (this.snapshot.sessionId === sessionId && activeVoice(this.snapshot.phase)) return
-    const muted = this.snapshot.sessionId === sessionId && this.snapshot.muted
+    const sameSession = this.snapshot.sessionId === sessionId
+    const muted = sameSession && this.snapshot.muted
     this.stop()
     const generation = this.generation
     const current = () => generation === this.generation && !this.disposed
     const pending = [], maxPending = 512 * 1024
     let pendingBytes = 0
-    this.patch({ sessionId, viewSessionId: sessionId, phase: 'connecting', minimized, muted, userText: '', assistantText: '', error: '', errorCode: undefined })
+    this.patch({ sessionId, viewSessionId: sessionId, phase: 'connecting', minimized, muted,
+      userText: sameSession ? this.snapshot.userText : '', assistantText: sameSession ? this.snapshot.assistantText : '', error: '', errorCode: undefined })
     const abort = new AbortController()
     this.abort = abort
     try {
