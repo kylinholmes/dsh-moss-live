@@ -1,6 +1,7 @@
 import React from 'react'
 import { Button, IconMicrophoneOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import { VoiceController } from './controller.js'
+import { VoiceSessions } from './voice-sessions.js'
+import { AudioOutput } from './audio-output.js'
 import { connect, openMedia } from './browser.js'
 import { VoiceView } from './VoiceView.jsx'
 import { Composer, selectMossComposer } from './Composer.jsx'
@@ -13,6 +14,7 @@ import { MicrophoneCheck } from './microphone.js'
 import { zh } from './locales.ts'
 import { voiceTargetId } from './voice-target.js'
 import { SettingsDialog } from './SettingsDialog.jsx'
+import { AudioOutputDialog } from './AudioOutputDialog.jsx'
 
 export const inject = ['slots', 'configForms', 'sessions', 'workspaces', 'uiWorkspace', 'layout', 'uiConversation', 'locale']
 const bindForm = form => ({ getSnapshot: () => form.getSnapshot(), subscribe: listener => form.subscribe(listener), mutate: (ops, revision) => form.mutate(ops, revision) })
@@ -34,8 +36,17 @@ export function apply(ctx) {
   const editor = new SettingsEditor(settingsForm)
   const microphone = new MicrophoneCheck(navigator.mediaDevices, t)
   ctx.effect(() => async () => { microphone.dispose(); await editor.dispose() }, 'moss.settings-editor')
-  const controller = new VoiceController({
-    t, openMedia: (...args) => openMedia(...args, t),
+  const output = new AudioOutput({ t })
+  const controller = new VoiceSessions({
+    t,
+    async openMedia(...args) {
+      const media = await openMedia(...args, t)
+      const dispose = media.dispose
+      let detach
+      media.dispose = () => { detach?.(); dispose() }
+      try { detach = await output.attach(media); return media }
+      catch (error) { media.dispose(); throw error }
+    },
     async connect(id, receive, signal) {
       const reference = ctx.sessions.retain(id, { source: 'mossVoice', signal })
       try {
@@ -47,16 +58,33 @@ export function apply(ctx) {
       } catch (error) { reference.release(); throw error }
     },
   })
-  controller.onExpand = id => {
+  const openVoiceSession = id => {
     if (id) ctx.uiWorkspace.openSession(id)
     ctx.layout.selectPanel('moss-session')
   }
+  let selectionQueued = false, selectionDisposed = false
+  const syncSelection = () => {
+    if (selectionQueued) return
+    selectionQueued = true
+    // Native navigation retains the next mainView before releasing the previous one.
+    queueMicrotask(() => {
+      selectionQueued = false
+      if (!selectionDisposed) controller.select(ctx.layout.panelInfo.getSnapshot().activePanelId === 'moss'
+        ? null : voiceTargetId(null, ctx.sessions.list.getSnapshot()))
+    })
+  }
+  ctx.effect(() => {
+    const stopSessions = ctx.sessions.list.subscribe(syncSelection)
+    const stopPanels = ctx.layout.panelInfo.subscribe(syncSelection)
+    syncSelection()
+    return () => { selectionDisposed = true; stopSessions(); stopPanels() }
+  }, 'moss.selected-call')
   ctx.effect(() => {
     const style = document.createElement('style')
     style.dataset.mossLive = ''; style.textContent = __MOSS_CSS_TEXT__; document.head.append(style)
-    const unload = () => controller.stop()
+    const unload = () => controller.stopAll()
     window.addEventListener('pagehide', unload)
-    return () => { window.removeEventListener('pagehide', unload); controller.dispose(); style.remove() }
+    return () => { window.removeEventListener('pagehide', unload); controller.dispose(); output.dispose(); style.remove() }
   }, 'moss.media-and-styles')
   const loadCatalog = async () => {
     const response = await fetch('/dsh-moss-live/config', { credentials: 'same-origin', cache: 'no-store' })
@@ -79,39 +107,32 @@ export function apply(ctx) {
       await ctx.sessions.refresh()
       ctx.uiWorkspace.openSession(result.sessionId)
       ctx.layout.selectPanel('moss-session')
-      await controller.start(result.sessionId, { minimized: false })
+      await controller.start(result.sessionId)
     } catch (error) { controller.patch({ draftError: { message: error.message, code: error.code } }); throw error }
     finally { controller.patch({ creating: false }) }
   })().finally(() => { creating = undefined })
   const historyBars = new Map()
   const shared = () => ({
-    hooks: { voice: controller, voiceSettings: settingsForm, voiceSessionList: ctx.sessions.list, voicePanelInfo: ctx.layout.panelInfo }, createVoice,
+    hooks: { voice: controller, voiceSettings: settingsForm, voiceSessionList: ctx.sessions.list, voicePanelInfo: ctx.layout.panelInfo, audioOutput: output }, createVoice,
     openVoicePanel: () => ctx.layout.selectPanel('moss'),
-    openVoiceSession: id => controller.expand(id),
-    startVoice: id => controller.start(id, { minimized: ctx.layout.panelInfo.getSnapshot().activePanelId !== 'moss-session' }), stopVoice: () => controller.stop(), pauseVoice: () => controller.pause(),
-    muteVoice: () => controller.mute(), interruptVoice: () => controller.interrupt(),
-    minimizeVoice: () => controller.minimize(), expandVoice: () => controller.expand(),
+    openVoiceSession,
+    startVoice: id => controller.start(id), stopVoice: id => controller.stop(id), pauseVoice: id => controller.pause(id),
+    muteVoice: id => controller.get(id).mute(),
+    expandVoice: id => openVoiceSession(id),
+    openAudioOutput: () => output.open(),
     openSettings: () => controller.patch({ settingsOpen: true }),
-    mountVoiceDraft: () => { controller.patch({ draftError: null }); controller.minimize() },
+    mountVoiceDraft: () => { controller.patch({ draftError: null }); controller.select(null) },
     mountVoiceHistory: id => {
       historyBars.set(id, (historyBars.get(id) ?? 0) + 1)
       controller.patch({ historyBars: [...historyBars.keys()] })
-      if (controller.getSnapshot().sessionId === id) controller.minimize()
       return () => {
         const count = historyBars.get(id) - 1
         if (count) historyBars.set(id, count); else historyBars.delete(id)
         controller.patch({ historyBars: [...historyBars.keys()] })
       }
     },
-    mountVoiceView: id => {
-      if (controller.getSnapshot().sessionId === id) controller.patch({ minimized: false })
-      return () => { if (controller.getSnapshot().sessionId === id) controller.minimize() }
-    },
-    openNativeConversation: () => {
-      const state = controller.getSnapshot()
-      const id = voiceTargetId(state, ctx.sessions.list.getSnapshot())
-      if (id) ctx.uiWorkspace.openSession(id)
-    },
+    mountVoiceView: id => { controller.select(id) },
+    openNativeConversation: id => { if (id) ctx.uiWorkspace.openSession(id) },
   })
   ctx.effect(() => ctx.uiConversation.events.register(voiceMessageDefinition), 'moss.native-transcript-revisions')
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ locale: 'moss', name: 'sidebar.panellist', id: 'moss', order: 5, label: () => t('index.6') }, MossIcon))
@@ -120,6 +141,10 @@ export function apply(ctx) {
   ctx.slots.inject('conversation.input.right', () => ctx.slots.register({ locale: 'moss', name: 'conversation.input.right', id: 'moss-entry', order: 5, inject: shared }, Entry))
   ctx.slots.inject('conversation.composer', () => ctx.slots.register({ locale: 'moss', name: 'conversation.composer', id: 'moss-composer', priority: -20, select: selectMossComposer, inject: shared }, Composer))
   ctx.slots.inject('shell.bottom', () => ctx.slots.register({ locale: 'moss', name: 'shell.bottom', id: 'moss-capsule', order: 20, inject: shared }, Overlay))
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({ locale: 'moss', name: 'shell.overlay', id: 'moss-output', inject: () => ({
+    hooks: { audioOutput: output }, closeOutput: () => output.close(), refreshOutput: () => output.refresh(),
+    authorizeOutput: () => output.authorize(), selectOutput: id => output.select(id),
+  }) }, AudioOutputDialog))
   const settingsInjected = () => ({ hooks: { settingsEditor: editor, microphone }, loadCatalog,
     editSettings: (group, value) => editor.edit(group, value), retrySettings: () => editor.retry(), discardSettings: () => editor.discard(),
     mountSettings: () => { void microphone.refresh(); return () => { void editor.flush(); microphone.stop() } },

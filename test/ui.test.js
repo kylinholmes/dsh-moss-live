@@ -12,7 +12,7 @@ test('DSH owns the rendered entry and overlay, and unloading removes both', asyn
   globalThis.window = dom.window
   globalThis.document = dom.window.document
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  const entries = new Map(), disposers = [], navigation = []
+  const entries = new Map(), disposers = [], navigation = [], sessionListeners = new Set(), panelListeners = new Set()
   const formSnapshot = { status: 'ready', writable: true, revision: 1, value: { appearance: {}, voiceModel: { provider: '', model: '' }, delegation: { agentPreset: '', provider: 'spawn' } } }
   const form = { getSnapshot: () => formSnapshot, subscribe: () => () => {}, async mutate() { return true } }
   let plugin
@@ -29,22 +29,26 @@ test('DSH owns the rendered entry and overlay, and unloading removes both', asyn
       },
     },
     configForms: { get: () => form },
-    sessions: { list: { getSnapshot: () => sessionSnapshot }, async refresh() {}, retain() { throw new Error('No media in UI test') } },
+    sessions: { list: { getSnapshot: () => sessionSnapshot, subscribe(listener) { sessionListeners.add(listener); return () => sessionListeners.delete(listener) } }, async refresh() {}, retain() { throw new Error('No media in UI test') } },
     workspaces: { list: { getSnapshot: () => ({ items: [] }) } },
-    uiWorkspace: { openSession(id) { navigation.push(['session', id]) } }, remote: { credentials: {} },
-    layout: { selectPanel(id) { navigation.push(['panel', id]) }, panelInfo: { getSnapshot: () => panelSnapshot, subscribe: () => () => {} } },
+    uiWorkspace: { openSession(id) {
+      navigation.push(['session', id])
+      sessionSnapshot.byId = { [id]: { id, cwd: 'C:/fixture', retainedBy: { mainView: 1 } } }
+      for (const listener of sessionListeners) listener()
+    } }, remote: { credentials: {} },
+    layout: { selectPanel(id) { navigation.push(['panel', id]); panelSnapshot.activePanelId = id; for (const listener of panelListeners) listener() }, panelInfo: { getSnapshot: () => panelSnapshot, subscribe(listener) { panelListeners.add(listener); return () => panelListeners.delete(listener) } } },
     uiConversation: { events: { register() { return () => {} } } },
     locale: { register() { return () => {} }, bind() { return key => ({ 'index.1': '语音对话', 'Composer.3': '返回语音' }[key] ?? key) } },
   }
   const panelSnapshot = { activePanelId: null }
   const sandbox = {
     window: dom.window, document: dom.window.document, location: dom.window.location,
-    navigator: dom.window.navigator, console, setTimeout, clearTimeout, setInterval, clearInterval,
+    navigator: dom.window.navigator, console, setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask,
     URL, AbortController, fetch: async () => { requestCount++; return createResponse },
     requestAnimationFrame: callback => setTimeout(callback, 0),
     MutationObserver: dom.window.MutationObserver,
   }
-  const primitives = { Button: React.forwardRef(({ variant, size, icon, children, ...props }, ref) => React.createElement('button', { ...props, ref }, icon, children)), ...Object.fromEntries(['IconMicrophoneOutlineRegular', 'IconChevronLeftOutlineRegular', 'IconPauseOutlineRegular', 'IconPlayOutlineRegular', 'IconStopFillRegular'].map(name => [name, () => React.createElement('svg')])) }
+  const primitives = { Button: React.forwardRef(({ variant, size, icon, children, ...props }, ref) => React.createElement('button', { ...props, ref }, icon, children)), ...Object.fromEntries(['IconMicrophoneOutlineRegular', 'IconChevronLeftOutlineRegular', 'IconPauseOutlineRegular', 'IconPlayOutlineRegular', 'IconStopFillRegular', 'IconSettingsOutlineRegular', 'IconChevronDownOutlineRegular'].map(name => [name, () => React.createElement('svg')])) }
   dom.window.__ModuleLoader__ = { load(row) { plugin = row.factory(name => { if (name === '@deepseek-ai/dsh-client-ui-primitives') return primitives; assert.equal(name, 'react'); return React }) } }
   vm.runInNewContext(readFileSync('lib/client.js', 'utf8'), sandbox)
   const root = createRoot(dom.window.document.getElementById('app'))
@@ -85,7 +89,14 @@ test('DSH owns the rendered entry and overlay, and unloading removes both', asyn
     assert.ok(dom.window.document.querySelector('button[aria-label="call.resume"]'), 'paused history keeps a resume control')
     assert.ok(dom.window.document.querySelector('button[aria-label="VoiceView.11"]'))
     assert.ok(dom.window.document.querySelector('button[aria-label="VoiceView.4"]'))
+    assert.ok(dom.window.document.querySelector('button[aria-label="output.title"]'), 'voice history exposes actual output device selection')
     const shared = options.inject()
+    let savedCall
+    await act(async () => { savedCall = shared.hooks.voice.get('moss-live-saved'); savedCall.patch({ phase: 'listening' }) })
+    await act(async () => dom.window.document.querySelector('button[aria-label="call.pause"]').click())
+    assert.equal(savedCall.getSnapshot().phase, 'paused', 'pause controls carry their own Session id')
+    await act(async () => dom.window.document.querySelector('button[aria-label="output.title"]').click())
+    assert.equal(shared.hooks.audioOutput.getSnapshot().open, true)
     await act(async () => shared.openSettings())
     assert.equal(shared.hooks.voice.getSnapshot().settingsOpen, true, 'settings shortcut has a real public state path')
     await act(async () => entries.get('shell.overlay:moss-settings').options.inject().closeSettings())
@@ -99,20 +110,29 @@ test('DSH owns the rendered entry and overlay, and unloading removes both', asyn
     assert.deepEqual(navigation, [['panel', 'moss']], 'homepage entry opens the new-conversation landing')
     navigation.length = 0
     formSnapshot.value.voiceModel = { provider: 'native', model: 'opaque-realtime' }
-    await act(async () => shared.hooks.voice.patch({ phase: 'listening', sessionId: 'moss-live-active' }))
+    let active
+    await act(async () => { active = shared.hooks.voice.get('moss-live-active'); shared.hooks.voice.select('moss-live-active'); active.patch({ phase: 'listening' }) })
     createResponse = { ok: false, json: async () => ({ error: 'FAILED', message: 'creation failed' }) }
     await act(async () => {
       await assert.rejects(Promise.all([shared.createVoice(), shared.createVoice()]), /creation failed/)
     })
     assert.equal(requestCount, 1, 'new-conversation creation is coalesced while pending')
-    assert.equal(shared.hooks.voice.getSnapshot().phase, 'listening', 'creation failure does not stop an existing call')
-    assert.equal(shared.hooks.voice.getSnapshot().sessionId, 'moss-live-active')
+    assert.equal(active.getSnapshot().phase, 'listening', 'creation failure does not mutate an existing call')
     assert.equal(navigation.length, 0)
     createResponse = { ok: true, json: async () => ({ sessionId: 'moss-live-new' }) }
     await act(async () => { await Promise.all([shared.createVoice(), shared.createVoice()]) })
     assert.equal(requestCount, 2, 'starting a new chat creates exactly one new native session')
-    assert.equal(shared.hooks.voice.getSnapshot().sessionId, 'moss-live-new')
+    assert.equal(shared.hooks.voice.getSnapshot().selectedId, 'moss-live-new')
+    assert.equal(active.getSnapshot().phase, 'paused', 'successful new conversation pauses the old one')
     assert.deepEqual(navigation, [['session', 'moss-live-new'], ['panel', 'moss-session']])
+    const overlay = entries.get('shell.bottom:moss-capsule')
+    await act(async () => {
+      context.layout.selectPanel(null)
+      context.uiWorkspace.openSession('ordinary-text')
+      root.render(React.createElement(overlay.component, bindInjected(overlay.options)))
+    })
+    assert.equal(dom.window.document.querySelector('[aria-label="Overlay.1"]'), null, 'ordinary text has no previous voice controller')
+    assert.equal(shared.hooks.voice.getSnapshot().selectedId, null)
     await act(async () => root.unmount())
     for (const stop of disposers.reverse()) await stop()
     assert.equal(entries.size, 0)

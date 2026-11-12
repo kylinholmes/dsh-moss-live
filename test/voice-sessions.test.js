@@ -89,3 +89,20 @@ test('switching away during microphone permission aborts the old call and ignore
   assert.deepEqual(closed, ['moss-live-a'])
   calls.dispose()
 })
+
+test('native retention changes during pause cannot recursively close the previous call', async () => {
+  assert.equal(typeof VoiceSessions, 'function')
+  let closes = 0, calls
+  calls = new VoiceSessions({
+    async connect() { return { connection: { send() {}, close() {
+      closes++
+      if (closes < 4) calls.select('moss-live-b')
+    } }, format: {} } },
+    async openMedia() { return { dispose() {}, playback: { interruptAll() {} } } },
+  })
+  await calls.start('moss-live-a')
+  calls.select('moss-live-b')
+  assert.equal(closes, 1, 'retention release may synchronously emit another native selection notification')
+  assert.equal(calls.getSnapshot().selectedId, 'moss-live-b')
+  calls.dispose()
+})

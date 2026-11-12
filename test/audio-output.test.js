@@ -42,6 +42,7 @@ test('a failed device change keeps the previous output and reports a useful erro
   const { output, storage } = setup()
   const actual = { id: '', async setOutputDevice(id) {
     if (id === 'denied') throw new DOMException('private hardware diagnostic', 'NotAllowedError')
+    if (id === 'missing') throw new DOMException('not connected', 'NotFoundError')
     this.id = id
   } }
   await output.attach(actual)
@@ -51,6 +52,9 @@ test('a failed device change keeps the previous output and reports a useful erro
   assert.equal(output.getSnapshot().selectedId, 'headset')
   assert.equal(storage.value, 'headset')
   assert.equal(output.getSnapshot().error, 'output.denied')
+  await assert.rejects(output.select('missing'))
+  assert.equal(actual.id, 'headset')
+  assert.equal(output.getSnapshot().error, 'output.unavailable', 'a rejected choice must not claim the current device changed to default')
   output.dispose()
 })
 

@@ -1,6 +1,6 @@
 const preferenceKey = 'dsh-moss-live.audio-output'
 const messageKey = error => error?.name === 'NotAllowedError' ? 'output.denied'
-  : error?.name === 'NotFoundError' ? 'output.disconnected' : 'output.failed'
+  : error?.name === 'NotFoundError' ? 'output.unavailable' : 'output.failed'
 const browserStorage = () => { try { return globalThis.localStorage } catch { return undefined } }
 
 /** Device ids are origin/browser-local; they never enter shared DSH configuration. */

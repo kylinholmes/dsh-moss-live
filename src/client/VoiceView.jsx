@@ -5,17 +5,20 @@ import { Orb } from './Orb.jsx'
 import { voiceTargetId } from './voice-target.js'
 import { VoiceControls } from './VoiceControls.jsx'
 import { phaseLabel } from './voice-state.js'
+import { voiceCallState } from './voice-sessions.js'
+import { AudioOutputButton } from './AudioOutputDialog.jsx'
 
-export function VoiceView({ t, useVoice, useVoiceSettings, useVoiceSessionList, sessionId: boundId, newConversation = false, openView, openSettings, createVoice, startVoice, stopVoice, muteVoice, pauseVoice, minimizeVoice, mountVoiceView, mountVoiceDraft, viewRequest, completeViewRequest }) {
-  const state = useVoice(snapshot => snapshot)
+export function VoiceView({ t, useVoice, useVoiceSettings, useVoiceSessionList, sessionId: boundId, newConversation = false, openView, openSettings, createVoice, startVoice, stopVoice, muteVoice, pauseVoice, openAudioOutput, mountVoiceView, mountVoiceDraft, viewRequest, completeViewRequest }) {
+  const snapshot = useVoice(value => value)
   const settings = useVoiceSettings(snapshot => snapshot)
   const sessions = useVoiceSessionList(snapshot => snapshot)
-  const sessionId = boundId ?? voiceTargetId(state, sessions, { newConversation })
+  const sessionId = boundId ?? voiceTargetId(snapshot, sessions, { newConversation })
+  const state = voiceCallState(snapshot, sessionId)
   const session = sessions.byId[sessionId]
   const appearance = settings.value?.appearance
   const own = sessionId?.startsWith('moss-live-')
   const here = Boolean(sessionId && state.sessionId === sessionId)
-  const failure = newConversation ? state.draftError : here && state.error ? { message: state.error, code: state.errorCode } : null
+  const failure = newConversation ? snapshot.draftError : here && state.error ? { message: state.error, code: state.errorCode } : null
   useEffect(() => {
     if (newConversation) { mountVoiceDraft(); return }
     if (!own) return
@@ -25,7 +28,7 @@ export function VoiceView({ t, useVoice, useVoiceSettings, useVoiceSessionList, 
   }, [sessionId, own, newConversation])
   return <section className={cx('moss-voice')} aria-label={t('VoiceView.1')} data-session-id={sessionId ?? ''}>
     <header className={cx('moss-voice-head')}><div className={cx('moss-session-heading')}><span className={cx('moss-wordmark')}><i />MOSS LIVE</span>{own && <span className={cx('moss-session-title')} title={sessionId}>{session?.title ?? session?.displayTitle ?? t('VoiceView.currentSession')}</span>}</div><div>
-      {own && <Button onClick={() => { minimizeVoice(); openView('chat', '') }}>{t('VoiceView.14')}</Button>}
+      {own && <Button onClick={() => openView(sessionId)}>{t('VoiceView.14')}</Button>}
     </div></header>
     <div className={cx('moss-voice-center')}>
       <Orb appearance={appearance} phase={here ? state.phase : 'idle'} energy={here ? state.energy : 0} label={t('VoiceView.2')} />
@@ -37,8 +40,8 @@ export function VoiceView({ t, useVoice, useVoiceSettings, useVoiceSessionList, 
       {failure && <div className={cx('moss-error')} role="alert"><p>{failure.message}</p><p>{failure.code === 'VOICE_INCOMPATIBLE' ? t('VoiceView.7') : failure.code === 'VOICE_NOT_CONFIGURED' ? t('VoiceView.8') : t('VoiceView.9')}</p><Button variant="outline" onClick={openSettings}>{t('VoiceView.15')}</Button></div>}
     </div>
     <footer className={cx('moss-voice-foot')}>
-      {own ? <VoiceControls {...{ t, state, sessionId, startVoice, stopVoice, muteVoice, pauseVoice }}/>
-        : <Button variant="primary" className={cx('moss-start')} disabled={state.creating} onClick={() => createVoice().catch(() => {})}>{t('VoiceView.16')}</Button>}
+      {own ? <VoiceControls {...{ t, state, sessionId, startVoice, stopVoice, muteVoice, pauseVoice, openAudioOutput }}/>
+        : <div className={cx('moss-start-controls')}><Button variant="primary" className={cx('moss-start')} disabled={snapshot.creating} onClick={() => createVoice().catch(() => {})}>{t('VoiceView.16')}</Button><AudioOutputButton {...{ t, openAudioOutput }}/></div>}
       <small>{own ? t('VoiceView.12') : t('VoiceView.13')}</small>
     </footer>
   </section>

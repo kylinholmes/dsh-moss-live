@@ -33,8 +33,8 @@ export class VoiceSessions {
   select(id) {
     if (this.disposed || this.snapshot.selectedId === id) return
     const previous = this.controllers.get(this.snapshot.selectedId)
-    if (previous && activeVoice(previous.getSnapshot().phase)) previous.pause()
     this.patch({ selectedId: id })
+    if (previous && activeVoice(previous.getSnapshot().phase)) previous.pause()
   }
   start(id) {
     if (this.disposed) return Promise.resolve()
